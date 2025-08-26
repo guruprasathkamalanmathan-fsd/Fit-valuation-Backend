@@ -1,0 +1,48 @@
+{
+   "creds": {
+      "app-id": "tvs-fit",
+      "api-key": "test"
+   },
+   "userService": {
+      "host": "http://localhost",
+      "version": "api/v1",
+      "port": "2261",
+      "app-id": "tvs-fit",
+      "api-key": "test",
+      "serviceAccess": {
+         "user": "user"
+      },
+      "endpoint": {
+         "clientList": "client-list",
+         "sendMessage": "send-message",
+         "sendEmail": "send-email",
+         "stateList": "state-list",
+         "cityList": "city-list",
+         "orderCreatet": "order-create",
+         "processList": "process-list",
+         "login": "login",
+         "logout": "logout",
+         "handlePassword":"handlePassword",
+         "vehicleMakeList": "vehicle-make-list",
+         "vehicleModelList": "vehicle-model-list",
+         "vehicleVariantList": "vehicle-variant-list",
+         "vehicleValidateNumber": "vehicle-validate-number",
+         "imageList": "image-list"
+      }
+   },
+   "support_info": {
+      "support_type": "Support",
+      "description": "Kindly contact our customer support team between and on weekdays",
+      "availability": "9:00AM - 6:00PM",
+      "tech_support": {
+         "person": "Technical Support",
+         "contact": "8925800248",
+         "email": "support@uitoux.in"
+      },
+      "business_support": {
+         "person": "Business Support",
+         "contact": "9840122793",
+         "email": "anant.ramkishor@tvs.in"
+      }
+   }
+}
