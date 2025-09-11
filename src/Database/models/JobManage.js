@@ -108,12 +108,12 @@ const JobManage = sequelize.define(
     },
     modify_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     modify_time: {
       type: Sequelize.TIME,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     createdby_user: {
@@ -287,7 +287,7 @@ const JobManage = sequelize.define(
     },
     assigned_tech_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     assigned_vendor_time: {
@@ -312,7 +312,7 @@ const JobManage = sequelize.define(
     },
     qc_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     qc_time: {
@@ -342,27 +342,27 @@ const JobManage = sequelize.define(
     },
     qc_done_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     qc_done_time: {
       type: Sequelize.TIME,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     inspection_done_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     inspection_done_time: {
       type: Sequelize.TIME,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     order_completed_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     order_completed_time: {
@@ -389,12 +389,12 @@ const JobManage = sequelize.define(
     },
     follow_up_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     follow_up_time: {
       type: Sequelize.TIME,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     app_remark: {
@@ -463,22 +463,22 @@ const JobManage = sequelize.define(
     },
     cancel_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     cancel_time: {
       type: Sequelize.TIME,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     unassign_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     unassign_time: {
       type: Sequelize.TIME,
-      defaultValue: 0,
+      // defaultValue: 0,
       allowNull: true,
     },
     technician_start_location: {
