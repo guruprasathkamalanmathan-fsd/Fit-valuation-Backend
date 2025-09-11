@@ -15,5 +15,6 @@ router.post('/user-deactivate-job', userController.deactivateUserCronJob);
 // router.post('/send-user-login-email', userController.sendUserLoginEmail);
 router.post('/reset-password-fingerprint', userController.fingerPrintPassword);
 router.post('/upload-user-information', userController.uploadUserInformation);
+// router.post("/signup",userController.signup);
 
 module.exports = router;

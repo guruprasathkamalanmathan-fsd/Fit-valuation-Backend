@@ -6,19 +6,19 @@ const crypto = require("crypto"); // secure token gen
 const bcrypt = require("bcrypt");
 const { sequelize } = require("../Database/db");
 const fileupload = require("../services/fileUpload");
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 const moment = require("moment-timezone");
 const config = require("../config/config.json");
 
 // Models
-const UserMaster = require("../Database/models/UserMaster");
+const UserMaster = require("../Database/models/userMaster");
 const RoleMaster = require("../Database/models/RoleMaster");
 const ProcessMaster = require("../Database/models/ProcessMaster");
 const JobManage = require("../Database/models/JobManage");
 const PasswordHistory = require("../Database/models/PasswordHistory");
 const VersionControl = require("../Database/models/VersionContol");
 
-//services
+//servicess
 const attachmentService = require("../services/attachmentService");
 const EmailService = require("../services/emailService");
 
@@ -32,56 +32,126 @@ const getValidationErrors = (validation) => {
 // login.controller.js (CJS)
 const login = async (req, res) => {
   try {
-    const { UserName, Password, FingerprintToken, includeSupportInfo, versionCode } = req.body;
+    const {
+      UserName,
+      Password,
+      FingerprintToken,
+      includeSupportInfo,
+      versionCode,
+    } = req.body;
 
     // 1️⃣ Input Validation
     const validation = new Validator(req.body, {
       UserName: "required|string",
       Password: "required_if:FingerprintToken,null", // Password required if fingerprint not provided
+      AppVersion: "required",
+      VersionCode: "required",
+      MANUFACTURER: "required",
+      MODEL: "required",
+      SDK_VERSION: "required|integer|min:0",
+      NETWORK_TYPE: "required",
     });
     if (!(await validation.check())) {
-      return res
-        .status(400)
-        .json({ success: false, message: Object.values(validation.errors).map(e => e.message).join(" ") });
+      return res.status(400).json({
+        success: false,
+        message: Object.values(validation.errors)
+          .map((e) => e.message)
+          .join(" "),
+      });
     }
 
     // 2️⃣ Find User
-    const user = await UserMaster.findOne({ where: { username: UserName, status: 1 } });
-    if (!user) return res.status(401).json({ success: false, message: "Invalid credentials" });
+    const user = await UserMaster.findOne({
+      where: { username: UserName, status: 1 },
+    });
+    if (!user)
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid credentials" });
 
     // 3️⃣ Password expiry check
     const now = Date.now();
-    const lastReset = user.last_reset_date ? new Date(user.last_reset_date).getTime() : null;
+    const lastReset = user.last_reset_date
+      ? new Date(user.last_reset_date).getTime()
+      : null;
 
     let alert = "";
     if (lastReset) {
-      const daysSinceReset = Math.ceil((now - lastReset) / (1000 * 60 * 60 * 24));
+      const daysSinceReset = Math.ceil(
+        (now - lastReset) / (1000 * 60 * 60 * 24)
+      );
       if (daysSinceReset > 30) {
         // Disable biometric if password expired
         if (user.is_biometric_enabled) {
           await user.update({ is_biometric_enabled: false });
         }
-        return res.status(401).json({ success: false, message: "Password expired. Reset your password." });
+        return res.status(401).json({
+          success: false,
+          message: "Password expired. Reset your password.",
+        });
       }
       if (daysSinceReset >= 27) {
         const remaining = 30 - daysSinceReset;
-        alert = `Your password will expire in ${remaining} day${remaining !== 1 ? "s" : ""}. Please reset your password.`;
+        alert = `Your password will expire in ${remaining} day${
+          remaining !== 1 ? "s" : ""
+        }. Please reset your password.`;
       }
     }
 
     // 4️⃣ Fingerprint login if enabled
     let loginSuccess = false;
-    if (user.is_biometric_enabled && FingerprintToken && user.fingerprint_hash) {
-      loginSuccess = await bcrypt.compare(FingerprintToken, user.fingerprint_hash);
+    if (
+      user.is_biometric_enabled &&
+      FingerprintToken &&
+      user.fingerprint_hash
+    ) {
+      loginSuccess = await bcrypt.compare(
+        FingerprintToken,
+        user.fingerprint_hash
+      );
       if (!loginSuccess && !Password) {
-        return res.status(401).json({ success: false, message: "Fingerprint mismatch" });
+        return res
+          .status(401)
+          .json({ success: false, message: "Fingerprint mismatch" });
       }
     }
 
     // 5️⃣ Fallback to password login
+    // if (!loginSuccess) {
+    //   if (!Password)
+    //     return res
+    //       .status(401)
+    //       .json({ success: false, message: "Password required" });
+    //   const isMatch = await bcrypt.compare(Password, user.password);
+    //   if (!isMatch)
+    //     return res
+    //       .status(401)
+    //       .json({ success: false, message: "Invalid credentials" });
+    // }
     if (!loginSuccess) {
-      if (!Password) return res.status(401).json({ success: false, message: "Password required" });
-      if (Password !== user.password) { return res.status(401).json({ success: false, message: "Invalid credentials" })}
+      if (!Password)
+        return res
+          .status(401)
+          .json({ success: false, message: "Password required" });
+
+      let isMatch = false;
+
+      // 1️⃣ First check if DB password is plain text
+      if (Password === user.password) {
+        isMatch = true;
+      } else {
+        // 2️⃣ If not, try bcrypt comparison
+        try {
+          isMatch = await bcrypt.compare(Password, user.password);
+        } catch (err) {
+          console.error("bcrypt compare error:", err);
+        }
+      }
+
+      if (!isMatch)
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid credentials" });
     }
     // 6️⃣ Device login check
     if (user.device_login_flag === 1) {
@@ -97,35 +167,71 @@ const login = async (req, res) => {
     // 7️⃣ Generate or reuse auth token
     let authToken = user.auth_token || crypto.randomBytes(24).toString("hex");
     if (!user.auth_token) {
-      await user.update({ auth_token: authToken, device_login_flag: 1, last_login: new Date() });
+      await user.update({
+        auth_token: authToken,
+        device_login_flag: 1,
+        last_login: new Date(),
+      });
     }
 
     // 8️⃣ Fetch related data concurrently
     const [roles, processes, vendor, latestVersion] = await Promise.all([
       RoleMaster.findAll({
-        where: { uid: { [Op.in]: user.role_id ? user.role_id.split(",") : [] } },
+        where: {
+          uid: { [Op.in]: user.role_id ? user.role_id.split(",") : [] },
+        },
         attributes: ["rolename"],
       }),
       ProcessMaster.findAll({
-        where: { uid: { [Op.in]: user.selected_process ? user.selected_process.split(",") : [] } },
+        where: {
+          uid: {
+            [Op.in]: user.selected_process
+              ? user.selected_process.split(",")
+              : [],
+          },
+        },
         attributes: ["process_type_code", "process_type", "vehicle_type"],
       }),
-      JobManage.findOne({ where: { uid: user.uid }, attributes: ["vendor_id"] }),
+      JobManage.findOne({
+        where: { uid: user.uid },
+        attributes: ["vendor_id"],
+      }),
       VersionControl.findOne({ order: [["created_at", "DESC"]] }),
     ]);
 
-    const roleNames = roles.map(r => r.rolename);
+    const roleNames = roles.map((r) => r.rolename);
     const vendor_id = vendor ? vendor.vendor_id : "";
 
     // 9️⃣ Role-based permissions
     const rolePermissions = {
-      CUSTOMER_SUPERVISOR: ["Search", "Order List", "Create Order", "Dashboard"],
+      CUSTOMER_SUPERVISOR: [
+        "Search",
+        "Order List",
+        "Create Order",
+        "Dashboard",
+      ],
       CUSTOMER_EXC: ["Dashboard", "Create Order", "Order List", "Search"],
-      OPS_MANAGER: ["Dashboard", "Create Order", "Pre-QC", "Create User", "Order List", "Search"],
-      TECHNICIAN: ["Dashboard", "Notification", "Technician Orders", "Order List", "Search"],
+      OPS_MANAGER: [
+        "Dashboard",
+        "Create Order",
+        "Pre-QC",
+        "Create User",
+        "Order List",
+        "Search",
+      ],
+      TECHNICIAN: [
+        "Dashboard",
+        "Notification",
+        "Technician Orders",
+        "Order List",
+        "Search",
+      ],
       APP_QC: ["Dashboard", "QC Assigned Orders", "Order List", "Search"],
     };
-    const Permission = roleNames.map(role => ({ RoleName: role, Menu: rolePermissions[role] || [] }));
+    const Permission = roleNames.map((role) => ({
+      RoleName: role,
+      Menu: rolePermissions[role] || [],
+    }));
 
     // 🔟 Optional: Version Info
     let versionInfo = null;
@@ -133,7 +239,8 @@ const login = async (req, res) => {
       versionInfo = {
         currentVersion: versionCode,
         latestVersion: latestVersion.version_code,
-        forceUpdate: parseInt(versionCode) < parseInt(latestVersion.version_code),
+        forceUpdate:
+          parseInt(versionCode) < parseInt(latestVersion.version_code),
       };
     }
 
@@ -167,10 +274,11 @@ const login = async (req, res) => {
     };
 
     return res.status(200).json({ success: true, data: finalData, alert });
-
   } catch (err) {
     console.error("Login Error:", err);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 };
 // logout api
@@ -260,6 +368,7 @@ const handlePassword = async (req, res) => {
   try {
     const { action } = req.query; // ?action=forgot or ?action=reset
 
+    // 🔹 Forgot password
     if (action === "forgot") {
       const { email_id } = req.body;
       const validation = new Validator(req.body, {
@@ -282,19 +391,23 @@ const handlePassword = async (req, res) => {
           .json({ success: false, message: "Invalid User Email Address" });
       }
 
+      // generate temp password (plain text)
       const tempPass = Math.floor(
         10000000 + Math.random() * 90000000
       ).toString();
 
+      // hash before saving
+      const hashedTemp = await bcrypt.hash(tempPass, 10);
+
       await UserMaster.update(
-        { password: tempPass },
+        { password: hashedTemp },
         { where: { uid: foundData.uid } }
       );
 
-      await emailService.sendEmail({
+      await EmailService.sendEmail({
         email_id,
         subject: "Forgot password request",
-        html: `Your temporary password is: ${tempPass}`,
+        html: `Your temporary password is: ${tempPass}`, // send plain text
         attachments: null,
       });
 
@@ -304,6 +417,7 @@ const handlePassword = async (req, res) => {
       });
     }
 
+    // 🔹 Reset password
     if (action === "reset") {
       const { UserName, OldPassword, NewPassword } = req.body;
       const validation = new Validator(req.body, {
@@ -319,21 +433,8 @@ const handlePassword = async (req, res) => {
         });
       }
 
-      const isPasswordInHistory = await PasswordHistory.findOne({
-        where: {
-          password: NewPassword,
-        },
-      });
-
-      if (isPasswordInHistory) {
-        return res.status(400).json({
-          success: false,
-          message: "New password already used. Choose a different one.",
-        });
-      }
-
       const foundData = await UserMaster.findOne({
-        where: { username: UserName, password: OldPassword },
+        where: { username: UserName },
       });
 
       if (!foundData) {
@@ -343,9 +444,33 @@ const handlePassword = async (req, res) => {
         });
       }
 
+      // compare plain text OldPassword with hashed DB password
+      const isMatch = await bcrypt.compare(OldPassword, foundData.password);
+      if (!isMatch) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid credentials",
+        });
+      }
+
+      // check password history (hash it before checking)
+      const isPasswordInHistory = await PasswordHistory.findOne({
+        where: { password: await bcrypt.hash(NewPassword, 10) },
+      });
+
+      if (isPasswordInHistory) {
+        return res.status(400).json({
+          success: false,
+          message: "New password already used. Choose a different one.",
+        });
+      }
+
+      // hash new password before saving
+      const hashedNew = await bcrypt.hash(NewPassword, 10);
+
       await UserMaster.update(
         {
-          password: NewPassword,
+          password: hashedNew,
           auth_token: null,
           device_login_flag: 0,
           last_reset_date: new Date(),
@@ -355,7 +480,7 @@ const handlePassword = async (req, res) => {
 
       await PasswordHistory.create({
         uid: foundData.uid,
-        password: NewPassword,
+        password: hashedNew,
         created_at: new Date(),
         updated_at: new Date(),
       });
@@ -464,7 +589,7 @@ const fingerPrintPassword = async (req, res) => {
   }
 };
 // ---- Deactivate Users Cron Job ----
-const deactivateUserCronJob = async (req,res)=> {
+const deactivateUserCronJob = async (req, res) => {
   try {
     const allUsers = await UserMaster.findAll();
     const currentDate = new Date();
@@ -703,22 +828,22 @@ const deactivateUserCronJob = async (req,res)=> {
 //             </head>
 //             <body>
 //               <h1>Introduction of KI MOBILITY (TVS AUTO ASSIST)</h1>
-              
+
 //               <p>Dear ${user.username},</p>
-              
+
 //               <p>I hope this message finds you well.</p>
-              
+
 //               <p>My name is Anant Kumar, and I am responsible for Used Vehicle Valuation at KI Mobility Solution Pvt Ltd (TVS Auto Assist). I am reaching out to introduce you to our specialized vehicle valuation services available across PAN India with the minimum turnaround time.</p>
-              
+
 //               <h2>About KI Mobility Solution Pvt Ltd (TVS Auto Assist):</h2>
 //               <p>At <strong>KI Mobility Solution Pvt Ltd (TVS Auto Assist)</strong>, we specialize in providing accurate and reliable vehicle valuation services tailored to meet the needs of both individuals and businesses. Whether you are looking to determine the value of a single vehicle or manage a fleet, we are here to assist you.</p>
-              
+
 //               <div class="note">
 //                 <p><strong>Note:</strong> We are already impaneled with your company to provide used vehicle valuation services for all categories including Auto, Commercial Vehicles, Construction Equipment, Tractors, 2W, and 3W across PAN India.</p>
 //               </div>
-              
+
 //               <p>Please find your user credentials below for raising valuation requests on our portal or through the app:</p>
-              
+
 //               <table>
 //                 <tr>
 //                   <th>User ID</th>
@@ -737,13 +862,13 @@ const deactivateUserCronJob = async (req,res)=> {
 //                   <td><a href="https://play.google.com/store/apps/details?id=com.tvsfit.inspection&pcampaignid=web_share" target="_blank">https://play.google.com/store/apps/details?id=com.tvsfit.inspection</a> (App Name: FIT VALUATION)</td>
 //                 </tr>
 //               </table>
-              
+
 //               <p><strong>Process to Create a Request:</strong></p>
 //               <p>Log in to the app or portal. In the app, you will find a + sign to create a lead, and in the portal, you will see the "Create Order" option. You will need to enter basic details like Customer Name, Mobile Number, Make, and Model of the vehicle.</p>
 //               <p>Once you create a request, you will start receiving real-time updates and can track the progress through both the app and the portal.</p>
-              
+
 //               <h2>State-wise SPOC Person Details and Escalation Matrix</h2>
-              
+
 //               <table>
 //                 <thead>
 //                   <tr>
@@ -985,7 +1110,7 @@ const deactivateUserCronJob = async (req,res)=> {
 //                   </tr>
 //                 </tbody>
 //               </table>
-              
+
 //               <h2>Escalation Matrix</h2>
 //                 <table>
 //                   <thead>
@@ -1018,18 +1143,18 @@ const deactivateUserCronJob = async (req,res)=> {
 //                   </tbody>
 //                 </table>
 //               <p>Kindly note that this is an automated response. Please do not reply to this email.</p>
-              
+
 //               <div class="highlight">
 //                 <p><strong>For any queries or additional assistance, please feel free to contact us.</strong></p>
 //               </div>
-              
+
 //               <p>Thank you for choosing KI Mobility Solution Pvt Ltd (TVS Auto Assist). We look forward to working with you.</p>
-              
+
 //               <p>Best Regards,<br>
 //               Anant Kumar<br>
 //               Used Vehicle Valuation<br>
 //               KI Mobility Solution Pvt Ltd (TVS Auto Assist)</p>
-              
+
 //               <div class="footer">
 //                 <p>&copy; ${new Date().getFullYear()} KI Mobility Solution Pvt Ltd (TVS Auto Assist). All rights reserved.</p>
 //               </div>
@@ -1047,7 +1172,7 @@ const deactivateUserCronJob = async (req,res)=> {
 //   }
 // };
 // ---- Upload User Information ----
-const uploadUserInformation = async(req, res)=>{
+const uploadUserInformation = async (req, res) => {
   try {
     const payload = req.body;
     const validatorRules = {
@@ -1073,12 +1198,16 @@ const uploadUserInformation = async(req, res)=>{
     });
 
     if (!foundData)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found or invalid Authentication Token" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found or invalid Authentication Token",
+      });
 
     if (payload.images) {
-      fileupload.uploadToUserInformation(payload.images, payload.AuthenticationToken);
+      fileupload.uploadToUserInformation(
+        payload.images,
+        payload.AuthenticationToken
+      );
     }
 
     await UserMaster.update(
@@ -1090,11 +1219,14 @@ const uploadUserInformation = async(req, res)=>{
       { where: { auth_token: payload.AuthenticationToken } }
     );
 
-    return res.json({ success: true, message: "User information updated successfully!" });
+    return res.json({
+      success: true,
+      message: "User information updated successfully!",
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
-}
+};
 
 module.exports = {
   login,

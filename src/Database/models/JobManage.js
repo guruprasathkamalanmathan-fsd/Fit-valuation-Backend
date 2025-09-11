@@ -1,7 +1,18 @@
 const { Sequelize } = require("sequelize");
 const { sequelize } = require("../db");
 const ProcessMaster  = require("./ProcessMaster");
-const UserMaster = require("./UserMaster")
+const Application = require("./Application");
+const UserMaster = require("./userMaster");
+const JobNotes = require("./JobNotes");
+const CityMaster = require("./CityMaster");
+const BankMaster = require("./BankMaster");
+const ReportStatus = require("./ReportStatus");
+const Manufmaster = require("./Manufmaster");
+const Modelmaster = require("./Modelmaster");
+const VariantMaster = require("./VarientMaster");
+const StateMaster = require("./StateMaster");
+const ApplicationInspection = require("./ApplicationInspection");
+
 
 const JobManage = sequelize.define(
   "job_manage",
@@ -23,7 +34,7 @@ const JobManage = sequelize.define(
       allowNull: true,
     },
     bank_id: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.BIGINT,
       allowNull: false,
     },
     company: {
@@ -97,7 +108,7 @@ const JobManage = sequelize.define(
     },
     modify_date: {
       type: Sequelize.DATEONLY,
-      defaultValue: null,
+      defaultValue: 0,
       allowNull: true,
     },
     modify_time: {
@@ -170,7 +181,7 @@ const JobManage = sequelize.define(
       allowNull: false,
     },
     banker_id: {
-      type: Sequelize.BIGINT,
+      type: Sequelize.INTEGER,
       allowNull: false,
       defaultValue: 0,
     },
@@ -220,7 +231,7 @@ const JobManage = sequelize.define(
       allowNull: true,
     },
     variant_id: {
-      type: Sequelize.STRING(255),
+      type: Sequelize.INTEGER,
       allowNull: true,
     },
     process: {
@@ -276,7 +287,7 @@ const JobManage = sequelize.define(
     },
     assigned_tech_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     assigned_vendor_time: {
@@ -301,7 +312,7 @@ const JobManage = sequelize.define(
     },
     qc_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     qc_time: {
@@ -331,7 +342,7 @@ const JobManage = sequelize.define(
     },
     qc_done_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     qc_done_time: {
@@ -341,7 +352,7 @@ const JobManage = sequelize.define(
     },
     inspection_done_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     inspection_done_time: {
@@ -351,7 +362,7 @@ const JobManage = sequelize.define(
     },
     order_completed_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     order_completed_time: {
@@ -378,7 +389,7 @@ const JobManage = sequelize.define(
     },
     follow_up_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     follow_up_time: {
@@ -452,7 +463,7 @@ const JobManage = sequelize.define(
     },
     cancel_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     cancel_time: {
@@ -462,7 +473,7 @@ const JobManage = sequelize.define(
     },
     unassign_date: {
       type: Sequelize.DATEONLY,
-      // defaultValue: 0,
+      defaultValue: 0,
       allowNull: true,
     },
     unassign_time: {
@@ -548,16 +559,16 @@ const JobManage = sequelize.define(
 );
 
 JobManage.belongsTo(ProcessMaster, { foreignKey: 'process', targetKey: 'uid', as: 'process_master' });
-// JobManage.belongsTo(BankMaster, { foreignKey: 'bank_id', targetKey: 'uid', as: 'client_master' });
-JobManage.belongsTo(UserMaster, { foreignKey: 'banker_id', targetKey: 'uid', as:'Usermaster' });
-// JobManage.belongsTo(ReportStatus, { foreignKey: 'report_status', targetKey: 'uid', as: 'report_master' });
-// JobManage.belongsTo(Manufmaster, { foreignKey: 'maker_id', targetKey: 'uid', as: 'make_master' });
-// JobManage.belongsTo(Modelmaster, { foreignKey: 'model_id', targetKey: 'uid', as: 'model_master' });
-// JobManage.belongsTo(VariantMaster, { foreignKey: 'variant_id', targetKey: 'uid', as: 'variant_master' });
-// JobManage.belongsTo(CityMaster, { foreignKey: 'city', targetKey: 'uid', as: 'city_master' });
-// JobManage.belongsTo(StateMaster, { foreignKey: 'state', targetKey: 'uid', as: 'state_master' });
-// JobManage.belongsTo(Application, { foreignKey: 'application_id', targetKey: 'uid', as: 'application' });
-// JobManage.belongsTo(ApplicationsInspection, { foreignKey: 'application_id', targetKey: 'uid', as: 'applications_inspection' });
-// JobManage.belongsTo(JobNotes, { foreignKey: 'uid', targetKey: 'job_id', as: 'action_log' });
+JobManage.belongsTo(BankMaster, { foreignKey: 'bank_id', targetKey: 'uid', as: 'client_master' });
+JobManage.belongsTo(UserMaster, { foreignKey: 'banker_id', targetKey: 'uid' });
+JobManage.belongsTo(ReportStatus, { foreignKey: 'report_status', targetKey: 'uid', as: 'report_master' });
+JobManage.belongsTo(Manufmaster, { foreignKey: 'maker_id', targetKey: 'uid', as: 'make_master' });
+JobManage.belongsTo(Modelmaster, { foreignKey: 'model_id', targetKey: 'uid', as: 'model_master' });
+JobManage.belongsTo(VariantMaster, { foreignKey: 'variant_id', targetKey: 'uid', as: 'variant_master' });
+JobManage.belongsTo(CityMaster, { foreignKey: 'city', targetKey: 'uid', as: 'city_master' });
+JobManage.belongsTo(StateMaster, { foreignKey: 'state', targetKey: 'uid', as: 'state_master' });
+JobManage.belongsTo(Application, { foreignKey: 'application_id', targetKey: 'uid', as: 'applications' });
+JobManage.belongsTo(ApplicationInspection, { foreignKey: 'application_id', targetKey: 'uid', as: 'applications_inspection' });
+JobManage.belongsTo(JobNotes, { foreignKey: 'uid', targetKey: 'job_id', as: 'action_log' });
 
 module.exports = JobManage;

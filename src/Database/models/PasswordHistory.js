@@ -5,7 +5,7 @@ const PasswordHistory = sequelize.define(
   'PasswordHistory',
   {
     id: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.BIGINT,
       autoIncrement: true,
       primaryKey: true,
     },

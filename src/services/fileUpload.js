@@ -1,7 +1,7 @@
 const Jimp = require("jimp");
 const path = require("path");
 const fs = require("fs");
-const UserMaster  = require("../Database/models/UserMaster");
+const UserMaster  = require("../Database/models/userMaster");
 
 const uploadToUserInformation = async (payload, AuthenticationToken) => {
   try {

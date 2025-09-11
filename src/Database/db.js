@@ -1,4 +1,5 @@
 const { Sequelize } = require("sequelize");
+require('dotenv').config();
 
 const sequelize = new Sequelize(
   process.env.database,
@@ -14,10 +15,10 @@ const sequelize = new Sequelize(
 const connectDB = async (app) => {
   try {
     await sequelize.authenticate();
-    console.log("✅ DB connected to server");
+    console.log("✅ DB connected:", sequelize.config.database); 
 
     // 🔥 Sync models with DB
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     console.log("✅ Tables created");
     
   } catch (err) {

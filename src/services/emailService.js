@@ -2,7 +2,7 @@
 const axios = require("axios");
 const { Validator } = require("node-input-validator");
 const JobManage = require("../Database/models/JobManage");
-const Application = require("../Database/models/Applications")
+const Application = require("../Database/models/Application")
 const nodemailer = require("nodemailer");
 
 require('dotenv').config();
@@ -23,7 +23,18 @@ const determineTransporter = () => {
 };
 
 // 🔹 Utility: send WhatsApp message
+
 const sendWhatsAppMessage = async (templateId, parameterValues, recipients) => {
+  if (process.env.ENV === "development") {
+    console.log("📱 [DEV MODE] WhatsApp not sent. Mock payload:", {
+      templateId,
+      parameterValues,
+      recipients,
+    });
+    return { success: true, message: "Mock WhatsApp (dev mode)" };
+  }
+
+  // ---- Live mode ----
   const url = "https://rcmapi.instaalerts.zone/services/rcm/sendMessage";
   const headers = {
     "Content-Type": "application/json",
@@ -58,35 +69,41 @@ const sendWhatsAppMessage = async (templateId, parameterValues, recipients) => {
 
 class EmailService {
   // ---------------- EMAIL ----------------
-  async sendEmail(payload) {
-    try {
-      const v = new Validator(payload, {
-        email_id: "required",
-        subject: "required",
-        html: "required",
-        attachments: "array|nullable",
-      });
-      if (!(await v.check())) return v.errors;
-
-      const transporter = determineTransporter();
-      const attachments = (payload.attachments || []).map(a => ({ path: a }));
-
-      const mailOptions = {
-        from: { name: "TVS FIT", address: process.env.smtpuser },
-        to: payload.email_id,
-        subject: payload.subject,
-        html: payload.html,
-        attachments,
-      };
-
-      await transporter.sendMail(mailOptions);
-      return { success: true, message: "Email Sent Successfully" };
-    } catch (err) {
-      return { success: false, message: err.message };
-    }
+async sendEmail(payload) {
+  if (process.env.ENV === "development") {
+    console.log("📧 [DEV MODE] Email not sent. Mock payload:", payload);
+    return { success: true, message: "Mock Email (dev mode)" };
   }
 
-  async sendPdfMail(payload) {
+  // 🔹 Real SMTP sending
+  try {
+    const v = new Validator(payload, {
+      email_id: "required",
+      subject: "required",
+      html: "required",
+      attachments: "array|nullable",
+    });
+    if (!(await v.check())) return v.errors;
+
+    const transporter = determineTransporter();
+    const attachments = (payload.attachments || []).map(a => ({ path: a }));
+
+    const mailOptions = {
+      from: { name: "TVS FIT", address: process.env.smtpuser },
+      to: payload.email_id,
+      subject: payload.subject,
+      html: payload.html,
+      attachments,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return { success: true, message: "Email Sent Successfully" };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+}
+
+async sendPdfMail(payload) {
     try {
       const v = new Validator(payload, { uid: "required", email_id: "required" });
       if (!(await v.check())) return v.errors;

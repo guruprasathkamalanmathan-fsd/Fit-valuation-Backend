@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const UserMaster  = require("../Database/models/UserMaster");
-const Application = require("../Database/models/Applications")
+// const Application = require("../Database/models/Applications")
 
 class AttachmentService {
 //    * 🔹 Helper: Decode base64 image/video
@@ -43,42 +43,42 @@ class AttachmentService {
   }
 
    // Upload inspection images
-  async inspupload(payload) {
-    const dir = `uploads/photo_${payload.app_client_id}`;
-    this.ensureDir(dir);
+  // async inspupload(payload) {
+  //   const dir = `uploads/photo_${payload.app_client_id}`;
+  //   this.ensureDir(dir);
 
-    // Use for..of instead of forEach for async
-    for (let [index, element] of payload.images.entries()) {
-      const { ext, buffer } = this.decodeBase64(element.image_data);
+  //   // Use for..of instead of forEach for async
+  //   for (let [index, element] of payload.images.entries()) {
+  //     const { ext, buffer } = this.decodeBase64(element.image_data);
 
-      const imgPath = path.join(dir, `${element.label}_${element.index}.${ext}`);
-      await fs.promises.writeFile(imgPath, buffer);
+  //     const imgPath = path.join(dir, `${element.label}_${element.index}.${ext}`);
+  //     await fs.promises.writeFile(imgPath, buffer);
 
-      await Application.update( 
-        { ["doc" + index]: imgPath },
-        { where: { uid: payload.insp_id } }
-      );
-    }
-    return true;
-  }
+  //     await Application.update( 
+  //       { ["doc" + index]: imgPath },
+  //       { where: { uid: payload.insp_id } }
+  //     );
+  //   }
+  //   return true;
+  // }
 
   // Upload video file
-  async videoupload(payload) {
-    const { ext, buffer } = this.decodeBase64(payload.video);
+  // async videoupload(payload) {
+  //   const { ext, buffer } = this.decodeBase64(payload.video);
 
-    const dir = `uploads/video_${payload.app_client_id}`;
-    this.ensureDir(dir);
+  //   const dir = `uploads/video_${payload.app_client_id}`;
+  //   this.ensureDir(dir);
 
-    const videoPath = path.join(dir, `${payload.label}.${ext}`);
-    await fs.promises.writeFile(videoPath, buffer);
+  //   const videoPath = path.join(dir, `${payload.label}.${ext}`);
+  //   await fs.promises.writeFile(videoPath, buffer);
 
-    await Application.update(
-      { media_files: videoPath },
-      { where: { uid: payload.insp_id } }
-    );
+  //   await Application.update(
+  //     { media_files: videoPath },
+  //     { where: { uid: payload.insp_id } }
+  //   );
 
-    return videoPath;
-  }
+  //   return videoPath;
+  // }
 }
 
 module.exports = new AttachmentService();

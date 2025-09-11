@@ -2,9 +2,10 @@ const { Sequelize } = require("sequelize");
 const { sequelize } = require("../db");
 const VendorMaster = require("./VendorMaster")
 
-const UserMaster = sequelize.define("Usermaster",{
+const UserMaster = sequelize.define("Usermaster",
+{
     uid: {  
-        type: Sequelize.BIGINT,
+        type: Sequelize.INTEGER,
         autoIncrement: true,
         allowNull: false,
         primaryKey: true,
@@ -22,10 +23,6 @@ const UserMaster = sequelize.define("Usermaster",{
         type: Sequelize.STRING(255),
         allowNull: false,
     },
-    fingerprint_hash: {
-    type: Sequelize.STRING(255),
-    allowNull: true, // user may not have enrolled yet
-  },
     auth_token:{
         type: Sequelize.STRING(255),
         allowNull: true,
@@ -358,5 +355,7 @@ const UserMaster = sequelize.define("Usermaster",{
         timestamps: false,
         tableName:'usermaster'
     });
+    
+UserMaster.belongsTo(VendorMaster, { foreignKey: 'company_id',targetKey:'uid' });
 
-   module.exports = UserMaster;
+module.exports = UserMaster;
