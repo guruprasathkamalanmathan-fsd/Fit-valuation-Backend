@@ -560,7 +560,7 @@ const JobManage = sequelize.define(
 
 JobManage.belongsTo(ProcessMaster, { foreignKey: 'process', targetKey: 'uid', as: 'process_master' });
 JobManage.belongsTo(BankMaster, { foreignKey: 'bank_id', targetKey: 'uid', as: 'client_master' });
-JobManage.belongsTo(UserMaster, { foreignKey: 'banker_id', targetKey: 'uid' });
+JobManage.belongsTo(UserMaster, { foreignKey: 'banker_id', targetKey: 'uid'});
 JobManage.belongsTo(ReportStatus, { foreignKey: 'report_status', targetKey: 'uid', as: 'report_master' });
 JobManage.belongsTo(Manufmaster, { foreignKey: 'maker_id', targetKey: 'uid', as: 'make_master' });
 JobManage.belongsTo(Modelmaster, { foreignKey: 'model_id', targetKey: 'uid', as: 'model_master' });

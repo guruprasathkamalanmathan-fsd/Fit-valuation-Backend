@@ -5,6 +5,8 @@ const   router = Router();
  
 router.post('/order-create',orderController.orderCreate);
 router.post('/order-histroy-list',orderController.orderHistoryList);
+router.post('/order-histroy-details',orderController.orderHistoryDetails);
+router.post('/order-reInitiated',orderController.orderReInitiated);
 
 
 module.exports = router;

@@ -20,7 +20,7 @@ const vehicleMakeList = async (req, res) => {
   try {
     const payload = req.body;
     const v = new Validator(payload, {
-      searchKey: "required|nullable",
+      searchKey: "string", // optional string instead of required|nullable
       limit: "required|integer|min:0",
       offset: "required|integer|min:0",
       processType: "required|string",
@@ -32,18 +32,33 @@ const vehicleMakeList = async (req, res) => {
     }
 
     let where = {};
+
+    // Filter by processType
     if (payload.processType) {
       const processInfo = await ProcessMaster.findOne({
         where: { vehicle_type: payload.processType },
       });
       if (processInfo) {
-        where = { [Op.and]: [where, { vehicle_type: { [Op.like]: `%${processInfo.vehicle_type}%` } }] };
+        where = {
+          [Op.and]: [
+            where,
+            { vehicle_type: { [Op.like]: `%${processInfo.vehicle_type}%` } },
+          ],
+        };
       }
     }
-    if (payload.searchKey) {
-      where = { [Op.or]: [{ manuf_name: { [Op.like]: `%${payload.searchKey}%` } }] };
+
+    // Filter by searchKey
+    if (payload.searchKey && payload.searchKey.trim() !== "") {
+      where = {
+        [Op.and]: [
+          where,
+          { manuf_name: { [Op.like]: `%${payload.searchKey}%` } },
+        ],
+      };
     }
 
+    // Fetch data
     const { count, rows } = await Manufmaster.findAndCountAll({
       where: { [Op.and]: [where] },
       limit: payload.limit,
@@ -62,19 +77,22 @@ const vehicleModelList = async (req, res) => {
   try {
     const payload = req.body;
     const v = new Validator(payload, {
-      searchKey: "required|nullable",
+      searchKey: "string",
       makeId: "required|integer",
       limit: "required|integer|min:0",
       offset: "required|integer|min:0",
     });
 
     if (!(await v.check())) {
-      const message = Object.values(v.errors).map(e => e.message).join("");
+      const message = Object.values(v.errors)
+        .map((e) => e.message)
+        .join("");
       return res.status(200).json({ success: false, message });
     }
 
     const where = { manuf_id: payload.makeId };
-    if (payload.searchKey) where.model_name = { [Op.like]: `%${payload.searchKey}%` };
+    if (payload.searchKey)
+      where.model_name = { [Op.like]: `%${payload.searchKey}%` };
 
     const { count, rows } = await Modelmaster.findAndCountAll({
       where,
@@ -95,19 +113,22 @@ const vehicleVariantList = async (req, res) => {
   try {
     const payload = req.body;
     const v = new Validator(payload, {
-      searchKey: "required|nullable",
+      searchKey: "string",
       modelId: "required|integer",
       limit: "required|integer|min:0",
       offset: "required|integer|min:0",
     });
 
     if (!(await v.check())) {
-      const message = Object.values(v.errors).map(e => e.message).join("");
+      const message = Object.values(v.errors)
+        .map((e) => e.message)
+        .join("");
       return res.status(200).json({ success: false, message });
     }
 
     const where = { model_id: payload.modelId };
-    if (payload.searchKey) where.variant_name = { [Op.like]: `%${payload.searchKey}%` };
+    if (payload.searchKey)
+      where.variant_name = { [Op.like]: `%${payload.searchKey}%` };
 
     const { count, rows } = await VariantMaster.findAndCountAll({
       where,
@@ -121,7 +142,17 @@ const vehicleVariantList = async (req, res) => {
         "drive_type",
         "cubic_capacity",
       ],
-      group: ["model_id", "variant_name", "uid", "fuel_type", "exshowroom_price", "cont_or_disc", "transmission", "drive_type", "cubic_capacity"],
+      group: [
+        "model_id",
+        "variant_name",
+        "uid",
+        "fuel_type",
+        "exshowroom_price",
+        "cont_or_disc",
+        "transmission",
+        "drive_type",
+        "cubic_capacity",
+      ],
       limit: payload.limit,
       offset: payload.offset * payload.limit,
     });
@@ -136,10 +167,15 @@ const vehicleVariantList = async (req, res) => {
 const vehicleValidateNumber = async (req, res) => {
   try {
     const payload = req.body;
-    const v = new Validator(payload, { vehicleNumber: "required" });
+    const v = new Validator(payload, 
+        { 
+            vehicleNumber: "required" 
+        });
 
     if (!(await v.check())) {
-      const message = Object.values(v.errors).map(e => e.message).join("");
+      const message = Object.values(v.errors)
+        .map((e) => e.message)
+        .join("");
       return res.status(400).json({ success: false, message });
     }
 
@@ -152,19 +188,21 @@ const vehicleValidateNumber = async (req, res) => {
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
     if (existingRecord) {
-      const lastUpdatedAt = new Date(existingRecord.updated_at || existingRecord.created_at);
-      if (lastUpdatedAt <= threeMonthsAgo) {
-        let dataFromApi, fromApi;
-        if (url.includes("maalta")) {
-          dataFromApi = await vahanService.getFromMalta(url, payload.vehicleNumber, res);
-          fromApi = "Maalta Search API";
-        } else if (url.includes("fla")) {
-          dataFromApi = await vahanService.getFromFastline(url, payload.vehicleNumber, res);
-          fromApi = "FastLine Search API";
-        } else if (url.includes("cuvora")) {
-          dataFromApi = await vahanService.getFromCarinfo(url, payload.vehicleNumber, res);
-          fromApi = "CarInfo Search API";
-        }
+      const lastUpdatedAt = new Date(
+        existingRecord.updated_at || existingRecord.created_at
+      );
+        if (lastUpdatedAt <= threeMonthsAgo) {
+          let dataFromApi, fromApi;
+          if (url == "https://maalta.in/api_hub/vahan/search.php") {
+            dataFromApi = await vahanService.getFromMalta(url, payload.vehicleNumber, res);
+            fromApi = "Maalta Search API";
+          } else if (url == "https://tvsfit.mytvs.in/reporting/vrm/api/test_new/fla/getfladata.php") {
+            dataFromApi = await vahanService.getFromFastline(url, payload.vehicleNumber, res);
+            fromApi = "FastLine Search API";
+          } else if (url == "https://api.cuvora.com/car/partner/v3/search") {
+            dataFromApi = await vahanService.getFromCarinfo(url, payload.vehicleNumber, res);
+            fromApi = "CarInfo Search API";
+          }
         await existingRecord.update({ ...dataFromApi, updated_at: new Date() });
         const [hitCount, created] = await VahanHitCount.findOrCreate({
           where: { vahan_name: fromApi },
@@ -177,18 +215,33 @@ const vehicleValidateNumber = async (req, res) => {
 
     let dataFromApi, fromApi;
     if (url.includes("maalta")) {
-      dataFromApi = await vahanService.getFromMalta(url, payload.vehicleNumber, res);
+      dataFromApi = await vahanService.getFromMalta(
+        url,
+        payload.vehicleNumber,
+        res
+      );
       fromApi = "Maalta Search API";
     } else if (url.includes("fla")) {
-      dataFromApi = await vahanService.getFromFastline(url, payload.vehicleNumber, res);
+      dataFromApi = await vahanService.getFromFastline(
+        url,
+        payload.vehicleNumber,
+        res
+      );
       fromApi = "FastLine Search API";
     } else if (url.includes("cuvora")) {
-      dataFromApi = await vahanService.getFromCarinfo(url, payload.vehicleNumber, res);
+      dataFromApi = await vahanService.getFromCarinfo(
+        url,
+        payload.vehicleNumber,
+        res
+      );
       fromApi = "CarInfo Search API";
     }
 
     if (dataFromApi.registration_number) {
-      existingRecord = await VehicleInformation.create({ ...dataFromApi, updated_at: null });
+      existingRecord = await VehicleInformation.create({
+        ...dataFromApi,
+        updated_at: null,
+      });
       const [hitCount, created] = await VahanHitCount.findOrCreate({
         where: { vahan_name: fromApi },
         defaults: { hit_count: 1, user_id: 2725 },
@@ -199,7 +252,8 @@ const vehicleValidateNumber = async (req, res) => {
 
     return res.status(200).json({
       success: false,
-      message: "The vehicle number has not been registered with the government portal",
+      message:
+        "The vehicle number has not been registered with the government portal",
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -217,7 +271,9 @@ const imageList = async (req, res) => {
     });
 
     if (!(await v.check())) {
-      const message = Object.values(v.errors).map(e => e.message).join("");
+      const message = Object.values(v.errors)
+        .map((e) => e.message)
+        .join("");
       return res.status(200).json({ success: false, message });
     }
 

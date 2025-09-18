@@ -12,7 +12,7 @@ const config = require("../config/config.json");
 
 // Models
 const UserMaster = require("../Database/models/userMaster");
-const RoleMaster = require("../Database/models/RoleMaster");
+const RoleMaster = require("../Database/models/Rolemaster");
 const ProcessMaster = require("../Database/models/ProcessMaster");
 const JobManage = require("../Database/models/JobManage");
 const PasswordHistory = require("../Database/models/PasswordHistory");
@@ -128,6 +128,7 @@ const login = async (req, res) => {
     //       .status(401)
     //       .json({ success: false, message: "Invalid credentials" });
     // }
+
     if (!loginSuccess) {
       if (!Password)
         return res
@@ -153,6 +154,7 @@ const login = async (req, res) => {
           .status(401)
           .json({ success: false, message: "Invalid credentials" });
     }
+
     // 6️⃣ Device login check
     if (user.device_login_flag === 1) {
       return res.status(200).json({
