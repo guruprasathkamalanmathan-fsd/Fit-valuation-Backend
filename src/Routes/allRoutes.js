@@ -2,7 +2,7 @@ const bodyParser = require('body-parser');
 const { Router } = require('express');
 
 const user = require('./user');
-// const location = require('./location');
+const location = require('./location');
 // const client = require('./client');
 // const process = require('./process');
 const vehicle = require('./vehicle');
@@ -20,7 +20,7 @@ const jsonParser = bodyParser.json({ limit: "100mb" });
 const router = Router();
 
 router.use('/common', jsonParser, user);
-// router.use('/common', jsonParser, location);
+router.use('/common', jsonParser, location);
 // router.use('/common', jsonParser, client);
 // router.use('/common', jsonParser, process);
 router.use('/common', jsonParser, vehicle);

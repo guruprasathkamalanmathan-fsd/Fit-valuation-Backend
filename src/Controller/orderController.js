@@ -20,32 +20,43 @@ const Modelmaster = require("../Database/models/Modelmaster");
 const VariantMaster = require("../Database/models/VarientMaster");
 const StateMaster = require("../Database/models/StateMaster");
 const BankMaster = require("../Database/models/BankMaster");
-// const VehicleInformation = require("../Database/models/VehicleInformation");
+const VehicleInformation = require("../Database/models/VehicleInformation");
 // Services
 const emailService = require("../services/emailService");
 const prefixService = require("../services/prefixService");
 
 const Sequelize = JobManage.sequelize;
 
-
-
-// ---------------- Order Create API ----------------
+// ---------------- Order Create API --------------
 const orderCreate = async (req, res) => {
   const payload = req.body;
   const transaction = await Sequelize.transaction();
 
   try {
-    // ---------------- Validate token first ----------------
+    /** ---------------- Normalize values ---------------- */
     const token =
       payload.AuthenticationToken ||
       payload.auth_token ||
       payload.authenticationToken;
-    const user = await Usermaster.findOne({
-      where: { auth_token: token },
-    });
-    console.log("User found:", user);
-    console.log("AuthenticationToken:", token);
 
+    const rcMap = {
+      "Original RC": 1,
+      "Xerox RC": 2,
+      "Without RC": 3,
+      RC: 1, // add mapping for 'RC' if used
+    };
+    payload.rcor_not = rcMap[payload.rcor_not] || payload.rcor_not;
+
+    const paymentStatusMap = {
+      Pending: 1,
+      Paid: 2,
+      Failed: 3,
+      Processing: 4,
+    };
+    payload.payment_status = paymentStatusMap[payload.payment_status] ?? 0;
+
+    /** ---------------- User authentication ---------------- */
+    const user = await Usermaster.findOne({ where: { auth_token: token } });
     if (!user) {
       await transaction.rollback();
       return res.status(401).json({
@@ -54,19 +65,12 @@ const orderCreate = async (req, res) => {
       });
     }
 
-    // ---------------- Log file creation ----------------
+    /** ---------------- Log file creation ---------------- */
     const currentDate = moment().tz("Asia/Kolkata");
     const formattedDate = currentDate.toISOString();
-    const folderName = `${currentDate.year()}-${
-      currentDate.month() + 1
-    }-${currentDate.date()}`;
-    const logFolderPath = path.join(
-      "./",
-      "log/order-creation-info",
-      folderName
-    );
-    if (!fs.existsSync(logFolderPath))
-      fs.mkdirSync(logFolderPath, { recursive: true });
+    const folderName = `${currentDate.year()}-${currentDate.month() + 1}-${currentDate.date()}`;
+    const logFolderPath = path.join("./", "log/order-creation-info", folderName);
+    if (!fs.existsSync(logFolderPath)) fs.mkdirSync(logFolderPath, { recursive: true });
 
     const logFilePath = path.join(logFolderPath, "order-info.log");
     try {
@@ -79,21 +83,13 @@ const orderCreate = async (req, res) => {
         const newLogFileName = `order-info-${formattedDate}.log`;
         fs.writeFileSync(path.join(logFolderPath, newLogFileName), "");
       } else {
-        fs.appendFileSync(
-          logFilePath,
-          `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(
-            payload
-          )}\n`
-        );
+        fs.appendFileSync(logFilePath, `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(payload)}\n`);
       }
-    } catch (err) {
-      fs.writeFileSync(
-        logFilePath,
-        `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(payload)}\n`
-      );
+    } catch {
+      fs.writeFileSync(logFilePath, `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(payload)}\n`);
     }
 
-    // ---------------- Validation ----------------
+    /** ---------------- Validation ---------------- */
     const validatorRules = {
       AuthenticationToken: "required",
       reg_no: "required",
@@ -112,14 +108,13 @@ const orderCreate = async (req, res) => {
     };
 
     const v = new Validator(payload, validatorRules);
-    const matched = await v.check();
-    if (!matched) {
-      let message = Object.values(v.errors).flat().join(" ");
+    if (!(await v.check())) {
+      const message = Object.values(v.errors).flat().join(" ");
       await transaction.rollback();
       return res.status(200).send({ success: false, message });
     }
 
-    // ---------------- Check for existing job ----------------
+    /** ---------------- Check for existing job ---------------- */
     const from_date = moment().format("YYYY-MM-01");
     const to_date = moment().format("YYYY-MM-DD");
 
@@ -127,11 +122,7 @@ const orderCreate = async (req, res) => {
       where: {
         reg_no: payload.reg_no,
         bank_id: payload.client,
-        edate: {
-          [Op.gte]: from_date,
-          [Op.lte]: to_date,
-          [Op.notIn]: [5],
-        },
+        edate: { [Op.gte]: from_date, [Op.lte]: to_date, [Op.notIn]: [5] },
       },
     });
 
@@ -144,48 +135,30 @@ const orderCreate = async (req, res) => {
       });
     }
 
-    // ---------------- Validate references ----------------
-    const makerExists = await Manufmaster.findOne({
-      where: { uid: payload.maker_id },
-    });
-    if (!makerExists)
-      throw new Error(`Maker ID ${payload.maker_id} does not exist.`);
+    /** ---------------- Validate references ---------------- */
+    const makerExists = await Manufmaster.findOne({ where: { uid: payload.maker_id } });
+    if (!makerExists) throw new Error(`Maker ID ${payload.maker_id} does not exist.`);
 
-    const modelExists = await Modelmaster.findOne({
-      where: { uid: payload.model_id },
-    });
-    if (!modelExists)
-      throw new Error(`Model ID ${payload.model_id} does not exist.`);
+    const modelExists = await Modelmaster.findOne({ where: { uid: payload.model_id } });
+    if (!modelExists) throw new Error(`Model ID ${payload.model_id} does not exist.`);
 
-    const variantExists = await VariantMaster.findOne({
-      where: { uid: payload.variant_id },
-    });
-    if (!variantExists)
-      throw new Error(`Variant ID ${payload.variant_id} does not exist.`);
+    const variantExists = await VariantMaster.findOne({ where: { uid: payload.variant_id } });
+    if (!variantExists) throw new Error(`Variant ID ${payload.variant_id} does not exist.`);
 
-    const stateExists = await StateMaster.findOne({
-      where: { uid: payload.state },
-    });
-    if (!stateExists)
-      throw new Error(`State ID ${payload.state} does not exist.`);
+    const stateExists = await StateMaster.findOne({ where: { uid: payload.state } });
+    if (!stateExists) throw new Error(`State ID ${payload.state} does not exist.`);
 
-    const bankMasterExists = await BankMaster.findOne({
-      where: { uid: payload.client },
-    });
-    if (!bankMasterExists)
-      throw new Error(`Bank ID ${payload.client} does not exist.`);
+    const bankMasterExists = await BankMaster.findOne({ where: { uid: payload.client } });
+    if (!bankMasterExists) throw new Error(`Bank ID ${payload.client} does not exist.`);
 
-    const banker = await Usermaster.findOne({
-      where: { uid: payload.banker_id },
-    });
-    if (!banker)
-      throw new Error(`Banker not found for banker_id=${payload.banker_id}`);
+    const banker = await Usermaster.findOne({ where: { uid: payload.banker_id } });
+    if (!banker) throw new Error(`Banker not found for banker_id=${payload.banker_id}`);
 
-    // ---------------- Prepare date/time ----------------
+    /** ---------------- Prepare date/time ---------------- */
     const edate = moment().format("YYYY-MM-DD");
     const etime = moment().format("H:mm:ss");
 
-    // ---------------- Create JobManage first ----------------
+    /** ---------------- Create JobManage (parent for now) ---------------- */
     const jobs = await JobManage.create(
       {
         ...payload,
@@ -194,26 +167,16 @@ const orderCreate = async (req, res) => {
         etime,
         assigned_vendor_date: edate,
         bank_id: payload.client,
-        banker_id: banker ? banker.uid : 0,
+        banker_id: banker.uid,
         src_from: 1,
-        bank_type: payload.bank_type,
-        rcor_not: payload.rcor_not,
-        process: payload.process,
-        order_source: payload.order_source,
-        order_type: payload.order_type,
-        remarks: payload.remarks,
-        partner_type: payload.partner_type,
-        pincode: payload.pincode,
-        state: payload.state,
-        city: payload.city,
       },
       { transaction }
     );
 
-    // ---------------- Create Application linked to JobManage ----------------
+    /** ---------------- Create Application (child) ---------------- */
     const application = await Application.create(
       {
-        ref_no: jobs.uid,
+        ref_no: "", // can update later
         bank_id: payload.client,
         reg_no: payload.reg_no,
         place: payload.address,
@@ -224,7 +187,6 @@ const orderCreate = async (req, res) => {
         etime,
         field_category: 0,
         application_date: edate,
-        job_id: jobs.uid,
         vendor_id: payload.vendor_id,
         technician_id: payload.assigned_technician,
         client: payload.client,
@@ -236,83 +198,57 @@ const orderCreate = async (req, res) => {
         fld1: payload.variant_id,
         fld30: payload.proposal_name,
         src_from: 1,
+        job_id: jobs.uid, // ✅ link job_id
       },
       { transaction }
     );
 
-    // ---------------- Update JobManage with application_id ----------------
-    await jobs.update({ application_id: application.uid }, { transaction });
-
-    // ---------------- Create supporting records ----------------
-    await ApplicationsInspection.create(
-      { application_id: application.uid },
-      { transaction }
-    );
-    await VahanItems.create(
-      { app_uid: application.uid, bank_id: payload.client },
-      { transaction }
-    );
-
-    // ---------------- Build case id and update JobManage ----------------
-    const prefix = prefixService.getPreAndPostfix("prefix");
-    const postfix = prefixService.getPreAndPostfix("postfix");
-    const caseid = `${prefix}/${jobs.uid}/${postfix}`;
-
+    /** ---------------- Update JobManage with application_id ---------------- */
     await JobManage.update(
-      {
-        case_id: caseid,
-        application_id: application.uid,
-        report_status: 11,
-        bank_id: payload.client,
-        rcfile: payload.rcfile_name,
-      },
+      { application_id: application.uid },
       { where: { uid: jobs.uid }, transaction }
     );
 
-    // ---------------- Emails & Logs ----------------
-    const maker_name = makerExists.manuf_name;
-    const model_name = modelExists.model_name;
-    const variant_name = variantExists.variant_name;
-    const client_name = bankMasterExists.bank_name;
+    /** ---------------- Create supporting records ---------------- */
+    await ApplicationsInspection.create({ application_id: application.uid }, { transaction });
+    await VahanItems.create({ app_uid: application.uid, bank_id: payload.client }, { transaction });
 
-    const setAllEmails = [payload.order_source_email, payload.client_off_email];
+    /** ---------------- Build case id ---------------- */
+    const caseid = `${prefixService.getPreAndPostfix("prefix")}/${jobs.uid}/${prefixService.getPreAndPostfix("postfix")}`;
+await JobManage.update(
+  { 
+    case_id: caseid, 
+    report_status: payload.report_status,  // ✅ use provided value
+    bank_id: payload.client, 
+    rcfile: payload.rcfile_name 
+  },
+  { where: { uid: jobs.uid }, transaction }
+);
+
+
+    /** ---------------- Emails & Logs ---------------- */
     const subject_b = `New case received for the vehicle number-${payload.reg_no}`;
     const message_b = `Dear Concern,<br/><br/>Please find the details of the new lead below<br/>
       <table border='1' cellspacing='0' cellpadding='0'>
-        <tr><td>Banker Name-</td><td>${client_name}</td></tr>
+        <tr><td>Banker Name-</td><td>${bankMasterExists.bank_name}</td></tr>
         <tr><td>Customer Name-</td><td>${payload.customer_name}</td></tr>
         <tr><td>Customer mobile number-</td><td>${payload.contact_no}</td></tr>
         <tr><td>Vehicle Number-</td><td>${payload.reg_no}</td></tr>
-        <tr><td>Make Model-</td><td>${maker_name} / ${model_name}</td></tr>
+        <tr><td>Make Model-</td><td>${makerExists.manuf_name} / ${modelExists.model_name}</td></tr>
         <tr><td>Banker ex Name-</td><td>${payload.executive}</td></tr>
         <tr><td>Banker ex Number-</td><td>${payload.executive_contact}</td></tr>
       </table><br/><br/>Regards<br/>TVS Team`;
 
-    // send mail (no blocking on result expected)
-    await emailService.sendEmail({
-      email_id: setAllEmails,
-      subject: subject_b,
-      html: message_b,
-      attachments: null,
-    });
+    await emailService.sendEmail({ email_id: [payload.order_source_email, payload.client_off_email], subject: subject_b, html: message_b });
+    await LogsEmail.create({ description: `${subject_b}, ${[payload.order_source_email, payload.client_off_email]}`, edate, etime }, { transaction });
 
-    await LogsEmail.create(
-      { description: subject_b + ", " + setAllEmails.toString(), edate, etime },
-      { transaction }
-    );
-
-    // ---------------- Update application report link ----------------
-    const order_visit_link = prefixService.genVisitLink(`${application.uid}`);
+    /** ---------------- Update application report link ---------------- */
     await Application.update(
-      {
-        report_link: order_visit_link,
-        report_status: 11,
-        bank_id: payload.client,
-      },
+      { report_link: prefixService.genVisitLink(`${application.uid}`), report_status: "0", bank_id: payload.client },
       { where: { uid: application.uid }, transaction }
     );
 
-    // ---------------- Audit trail / Job Notes ----------------
+    /** ---------------- Audit trail ---------------- */
     await JobNotes.create(
       {
         template: 0,
@@ -328,14 +264,14 @@ const orderCreate = async (req, res) => {
       { transaction }
     );
 
-    // ---------------- Order message (SMS/WhatsApp etc) ----------------
+    /** ---------------- Order message ---------------- */
     await emailService.sendOrderMessage({
-      banker_name: client_name,
+      banker_name: bankMasterExists.bank_name,
       customer_name: payload.customer_name,
       customer_contact: payload.contact_no,
       vehicle_number: payload.reg_no,
-      maker: maker_name || "NA",
-      model: model_name || "NA",
+      maker: makerExists.manuf_name || "NA",
+      model: modelExists.model_name || "NA",
       banker_exname: payload.executive || "NA",
       banker_excontact: payload.executive_contact || "NA",
       loan_no: payload.loan_account_no,
@@ -344,21 +280,12 @@ const orderCreate = async (req, res) => {
       exe_2: payload.executive_no_2,
     });
 
-    // ---------------- Commit transaction ----------------
+    /** ---------------- Commit transaction ---------------- */
     await transaction.commit();
-
-    return res.json({
-      success: true,
-      message: "Order Created Successfully",
-      jobId: jobs.uid,
-      // applicationId: application.uid,
-    });
+    return res.json({ success: true, message: "Order Created Successfully", jobId: jobs.uid });
   } catch (err) {
     await transaction.rollback();
-    return res.status(500).json({
-      success: false,
-      message: JSON.stringify(err, Object.getOwnPropertyNames(err)),
-    });
+    return res.status(500).json({ success: false, message: JSON.stringify(err, Object.getOwnPropertyNames(err)) });
   }
 };
 
@@ -403,7 +330,7 @@ const orderHistoryList = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Authentication failed - 1" });
+        .json({ success: false, message: "Authentication token not match" });
     }
 
     // Password reset check (keep flow; change to a flag so frontend can decide)
@@ -641,7 +568,7 @@ const orderHistoryDetails = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Authentication failed - 1" });
+        .json({ success: false, message: "Authentication token not match" });
     }
 
     // ✅ Fetch Job Data
@@ -887,7 +814,7 @@ const orderHistoryDetails = async (req, res) => {
   }
 };
 
-const orderReInitiated = async (req, res)=> {
+const orderReInitiated = async (req, res) => {
   try {
     const { AuthenticationToken, orderId, re_initiate_remarks } = req.body;
 
@@ -919,7 +846,7 @@ const orderReInitiated = async (req, res)=> {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Authentication failed - 1" });
+        .json({ success: false, message: "Authentication token not match" });
     }
 
     // Check if the report_status is already 0 in JobManage
@@ -1069,12 +996,12 @@ const masterOrderDetailsList = async (req, res) => {
     const payload = req.body;
     const validatorRules = {
       AuthenticationToken: "required",
-      searchKey: "required|nullable",
-      fromDate: "required|nullable",
-      toDate: "required|nullable",
-      statusId: "required|nullable|string",
-      techId: "required|nullable|string",
-      client: "required|nullable|string",
+      searchKey: "string",
+      fromDate: "string",
+      toDate: "string",
+      statusId: "string",
+      techId: "string",
+      client: "string",
       limit: "required|integer|min:0",
       offset: "required|integer|min:0",
     };
@@ -1106,7 +1033,7 @@ const masterOrderDetailsList = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Authentication failed - 1" });
+        .json({ success: false, message: "Authentication token not match" });
     }
 
     if (user) {
@@ -1132,21 +1059,35 @@ const masterOrderDetailsList = async (req, res) => {
     const selectedDistrictRaw = user.getDataValue("selected_city");
     const selectedStatesRaw = user.getDataValue("selected_state");
 
+    // Fix selectedBank, selectedStates, selectedDistrict
     const selectedBank = selectedBankRaw
-      ? selectedBankRaw.split(",").map((bankId) => +bankId)
+      ? selectedBankRaw
+          .split(",")
+          .map((bankId) => Number(bankId))
+          .filter((id) => !isNaN(id))
       : [];
+    console.log("SelectedBank:", selectedBank);
+
     const selectedDistrict = selectedDistrictRaw
-      ? selectedDistrictRaw.split(",").map((districtId) => +districtId)
+      ? selectedDistrictRaw
+          .split(",")
+          .map((districtId) => Number(districtId))
+          .filter((id) => !isNaN(id))
       : [];
+    console.log("selectedDistrict:", selectedDistrict);
+
     const selectedStates = selectedStatesRaw
-      ? selectedStatesRaw.split(",").map((stateId) => +stateId)
+      ? selectedStatesRaw
+          .split(",")
+          .map((stateId) => Number(stateId))
+          .filter((id) => !isNaN(id))
       : [];
+    console.log("SelectedStates:", selectedStates);
 
     const parseDate = (dateString) => {
-      if (dateString === null) {
-        return null;
-      }
+      if (!dateString || dateString === "null") return null;
       const [year, month, day] = dateString.split("-").map(Number);
+      if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
       return new Date(year, month - 1, day);
     };
 
@@ -1320,14 +1261,70 @@ const masterOrderDetailsList = async (req, res) => {
               // Vehicle information
               let foundVechData = await VehicleInformation.findOne({
                 where: { registration_number: foundDataItem.reg_no },
-                attributes:[ "temp_vahan_search_uid", "owner_name", "registered_place", "owner_mobile_no", "manufacturer", "manufacturer_model",
-                    "engine_number", "chassis_number", "registration_number", "registration_date", "m_registration", "m_registration_name", "y_registration",
-                    "body_type", "m_y_manufacturing", "m_manufacturing", "m_manufacturing_name", "y_manufacturing", "seating_capacity", "fuel_type", "insurance_name",
-                    "insurance_validity", "vehicle_class", "colour", "owner_serial_number", "number_of_cylinder", "permit_no", "fitness_upto", "insurance_policy_no",
-                    "permanent_address", "permit_validity_from", "permit_validity_upto", "permit_type", "financer", "noc_details", "norms_type", "blacklist_status",
-                    "puc_number", "current_address", "permit_issue_date", "npermit_upto", "father_name", "gross_vehicle_weight", "cubic_capacity", "status_message", "wheelbase",
-                    "status", "npermit_issued_by", "noc_status", "mv_tax_upto", "state", "npermit_no", "noc_valid_upto", "noc_issue_date", "status_verification", "puc_valid_upto",
-                    "unladden_weight", "standing_capacity", "status_verfy_date", "vehicle_category", "sleeper_capacity", "rc_expiry_date"],
+                attributes: [
+                  "temp_vahan_search_uid",
+                  "owner_name",
+                  "registered_place",
+                  "owner_mobile_no",
+                  "manufacturer",
+                  "manufacturer_model",
+                  "engine_number",
+                  "chassis_number",
+                  "registration_number",
+                  "registration_date",
+                  "m_registration",
+                  "m_registration_name",
+                  "y_registration",
+                  "body_type",
+                  "m_y_manufacturing",
+                  "m_manufacturing",
+                  "m_manufacturing_name",
+                  "y_manufacturing",
+                  "seating_capacity",
+                  "fuel_type",
+                  "insurance_name",
+                  "insurance_validity",
+                  "vehicle_class",
+                  "colour",
+                  "owner_serial_number",
+                  "number_of_cylinder",
+                  "permit_no",
+                  "fitness_upto",
+                  "insurance_policy_no",
+                  "permanent_address",
+                  "permit_validity_from",
+                  "permit_validity_upto",
+                  "permit_type",
+                  "financer",
+                  "noc_details",
+                  "norms_type",
+                  "blacklist_status",
+                  "puc_number",
+                  "current_address",
+                  "permit_issue_date",
+                  "npermit_upto",
+                  "father_name",
+                  "gross_vehicle_weight",
+                  "cubic_capacity",
+                  "status_message",
+                  "wheelbase",
+                  "status",
+                  "npermit_issued_by",
+                  "noc_status",
+                  "mv_tax_upto",
+                  "state",
+                  "npermit_no",
+                  "noc_valid_upto",
+                  "noc_issue_date",
+                  "status_verification",
+                  "puc_valid_upto",
+                  "unladden_weight",
+                  "standing_capacity",
+                  "status_verfy_date",
+                  "vehicle_category",
+                  "sleeper_capacity",
+                  "rc_expiry_date",
+                ],
               });
 
               if (!foundVechData) {
@@ -1388,7 +1385,8 @@ const masterOrderDetailsList = async (req, res) => {
               const orderListDetails = {
                 uid: foundDataItem.uid,
                 customer_name: foundDataItem.customer_name,
-                client_type: foundDataItem.client_master.bank_name.toUpperCase(),
+                client_type:
+                  foundDataItem.client_master.bank_name.toUpperCase(),
                 reg_no: foundDataItem.reg_no.toUpperCase(),
                 chassis_no: foundDataItem.chassis_no,
                 state_name:
@@ -1479,5 +1477,90 @@ const masterOrderDetailsList = async (req, res) => {
   }
 };
 
+const getActivity = async (req, res) => {
+  try {
+    const payload = req.body;
+    const validatorRules = {
+      AuthenticationToken: "required",
+      statusId: "required|nullable|string",
+      techId: "required|nullable|string",
+      limit: "required|integer|min:0",
+      job_id: "required|integer|min:0",
+      offset: "required|integer|min:0",
+    };
 
-module.exports = { orderCreate, orderHistoryList, orderHistoryDetails ,orderReInitiated, masterOrderDetailsList};
+    const v = new Validator(payload, validatorRules);
+    const matched = await v.check();
+    if (!matched) {
+      let results = Object.values(v.errors);
+      let message = "";
+      results.forEach((e) => {
+        message += e.message;
+      });
+      return res.status(200).send({ success: false, message });
+    }
+
+    // USER HIERARCHY ORDER LIST
+    const user = await Usermaster.findOne({
+      where: { auth_token: payload.AuthenticationToken },
+      attributes: ["uid"],
+      raw: true,
+    });
+
+    const jobNotesData = await JobNotes.findAll({
+      where: { job_id: payload.job_id },
+      order: [["uid", "DESC"]],
+      limit: payload.limit,
+      offset: payload.offset * payload.limit,
+      raw: true,
+    });
+    console.log("job id is", jobNotesData);
+
+    // HTML remarks parser
+    const parseHTMLRemarks = (remarks) => {
+      const parsedRemarks = {};
+      const regex = /<b>(.*?)<\/b>([\s\S]*?)(?=(?:<b>|$))/g;
+      let match;
+      remarks = remarks.replace(/\<br\/\>/g, "");
+
+      while ((match = regex.exec(remarks)) !== null) {
+        const [, key, value] = match;
+        parsedRemarks[key.trim()] = value.trim();
+      }
+
+      return parsedRemarks;
+    };
+
+    const parsedJobNotes = jobNotesData.map((item) => ({
+      uid: item.uid,
+      template: item.template,
+      remarks: parseHTMLRemarks(item.remarks || ""),
+      created_date: item.created_date,
+      created_time: item.created_time,
+      created_user: item.created_user,
+      job_id: item.job_id,
+      created_username: item.created_username || "",
+      status: item.status || "",
+      other_detail: item.other_detail || "",
+    }));
+
+    return res.status(200).json({
+      success: true,
+      activity_log: parsedJobNotes,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Internal Server Error",
+    });
+  }
+};
+
+module.exports = {
+  orderCreate,
+  orderHistoryList,
+  orderHistoryDetails,
+  orderReInitiated,
+  masterOrderDetailsList,
+  getActivity,
+};

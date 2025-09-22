@@ -18,7 +18,7 @@ const connectDB = async (app) => {
     console.log("✅ DB connected:", sequelize.config.database); 
 
     // 🔥 Sync models with DB
-    await sequelize.sync({ alter: true});
+    await sequelize.sync({alter: true});
     console.log("✅ Tables created");
     
   } catch (err) {

@@ -258,7 +258,7 @@ const UserMaster = sequelize.define("Usermaster",
     payment_status: {
         type: Sequelize.STRING(255),
         allowNull: true,
-        defaultValue:null
+        defaultValue:0
     },
     retail_or_yard: {
         type: Sequelize.INTEGER,
