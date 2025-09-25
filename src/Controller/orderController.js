@@ -24,6 +24,7 @@ const VehicleInformation = require("../Database/models/VehicleInformation");
 // Services
 const emailService = require("../services/emailService");
 const prefixService = require("../services/prefixService");
+const vahanService = require("../services/vahanServices");
 
 const Sequelize = JobManage.sequelize;
 
@@ -68,9 +69,16 @@ const orderCreate = async (req, res) => {
     /** ---------------- Log file creation ---------------- */
     const currentDate = moment().tz("Asia/Kolkata");
     const formattedDate = currentDate.toISOString();
-    const folderName = `${currentDate.year()}-${currentDate.month() + 1}-${currentDate.date()}`;
-    const logFolderPath = path.join("./", "log/order-creation-info", folderName);
-    if (!fs.existsSync(logFolderPath)) fs.mkdirSync(logFolderPath, { recursive: true });
+    const folderName = `${currentDate.year()}-${
+      currentDate.month() + 1
+    }-${currentDate.date()}`;
+    const logFolderPath = path.join(
+      "./",
+      "log/order-creation-info",
+      folderName
+    );
+    if (!fs.existsSync(logFolderPath))
+      fs.mkdirSync(logFolderPath, { recursive: true });
 
     const logFilePath = path.join(logFolderPath, "order-info.log");
     try {
@@ -83,10 +91,18 @@ const orderCreate = async (req, res) => {
         const newLogFileName = `order-info-${formattedDate}.log`;
         fs.writeFileSync(path.join(logFolderPath, newLogFileName), "");
       } else {
-        fs.appendFileSync(logFilePath, `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(payload)}\n`);
+        fs.appendFileSync(
+          logFilePath,
+          `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(
+            payload
+          )}\n`
+        );
       }
     } catch {
-      fs.writeFileSync(logFilePath, `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(payload)}\n`);
+      fs.writeFileSync(
+        logFilePath,
+        `${formattedDate} | ORDER CREATION | -- || ${JSON.stringify(payload)}\n`
+      );
     }
 
     /** ---------------- Validation ---------------- */
@@ -136,23 +152,41 @@ const orderCreate = async (req, res) => {
     }
 
     /** ---------------- Validate references ---------------- */
-    const makerExists = await Manufmaster.findOne({ where: { uid: payload.maker_id } });
-    if (!makerExists) throw new Error(`Maker ID ${payload.maker_id} does not exist.`);
+    const makerExists = await Manufmaster.findOne({
+      where: { uid: payload.maker_id },
+    });
+    if (!makerExists)
+      throw new Error(`Maker ID ${payload.maker_id} does not exist.`);
 
-    const modelExists = await Modelmaster.findOne({ where: { uid: payload.model_id } });
-    if (!modelExists) throw new Error(`Model ID ${payload.model_id} does not exist.`);
+    const modelExists = await Modelmaster.findOne({
+      where: { uid: payload.model_id },
+    });
+    if (!modelExists)
+      throw new Error(`Model ID ${payload.model_id} does not exist.`);
 
-    const variantExists = await VariantMaster.findOne({ where: { uid: payload.variant_id } });
-    if (!variantExists) throw new Error(`Variant ID ${payload.variant_id} does not exist.`);
+    const variantExists = await VariantMaster.findOne({
+      where: { uid: payload.variant_id },
+    });
+    if (!variantExists)
+      throw new Error(`Variant ID ${payload.variant_id} does not exist.`);
 
-    const stateExists = await StateMaster.findOne({ where: { uid: payload.state } });
-    if (!stateExists) throw new Error(`State ID ${payload.state} does not exist.`);
+    const stateExists = await StateMaster.findOne({
+      where: { uid: payload.state },
+    });
+    if (!stateExists)
+      throw new Error(`State ID ${payload.state} does not exist.`);
 
-    const bankMasterExists = await BankMaster.findOne({ where: { uid: payload.client } });
-    if (!bankMasterExists) throw new Error(`Bank ID ${payload.client} does not exist.`);
+    const bankMasterExists = await BankMaster.findOne({
+      where: { uid: payload.client },
+    });
+    if (!bankMasterExists)
+      throw new Error(`Bank ID ${payload.client} does not exist.`);
 
-    const banker = await Usermaster.findOne({ where: { uid: payload.banker_id } });
-    if (!banker) throw new Error(`Banker not found for banker_id=${payload.banker_id}`);
+    const banker = await Usermaster.findOne({
+      where: { uid: payload.banker_id },
+    });
+    if (!banker)
+      throw new Error(`Banker not found for banker_id=${payload.banker_id}`);
 
     /** ---------------- Prepare date/time ---------------- */
     const edate = moment().format("YYYY-MM-DD");
@@ -210,21 +244,28 @@ const orderCreate = async (req, res) => {
     );
 
     /** ---------------- Create supporting records ---------------- */
-    await ApplicationsInspection.create({ application_id: application.uid }, { transaction });
-    await VahanItems.create({ app_uid: application.uid, bank_id: payload.client }, { transaction });
+    await ApplicationsInspection.create(
+      { application_id: application.uid },
+      { transaction }
+    );
+    await VahanItems.create(
+      { app_uid: application.uid, bank_id: payload.client },
+      { transaction }
+    );
 
     /** ---------------- Build case id ---------------- */
-    const caseid = `${prefixService.getPreAndPostfix("prefix")}/${jobs.uid}/${prefixService.getPreAndPostfix("postfix")}`;
-await JobManage.update(
-  { 
-    case_id: caseid, 
-    report_status: payload.report_status,  // ✅ use provided value
-    bank_id: payload.client, 
-    rcfile: payload.rcfile_name 
-  },
-  { where: { uid: jobs.uid }, transaction }
-);
-
+    const caseid = `${prefixService.getPreAndPostfix("prefix")}/${
+      jobs.uid
+    }/${prefixService.getPreAndPostfix("postfix")}`;
+    await JobManage.update(
+      {
+        case_id: caseid,
+        report_status: payload.report_status, // ✅ use provided value
+        bank_id: payload.client,
+        rcfile: payload.rcfile_name,
+      },
+      { where: { uid: jobs.uid }, transaction }
+    );
 
     /** ---------------- Emails & Logs ---------------- */
     const subject_b = `New case received for the vehicle number-${payload.reg_no}`;
@@ -239,12 +280,30 @@ await JobManage.update(
         <tr><td>Banker ex Number-</td><td>${payload.executive_contact}</td></tr>
       </table><br/><br/>Regards<br/>TVS Team`;
 
-    await emailService.sendEmail({ email_id: [payload.order_source_email, payload.client_off_email], subject: subject_b, html: message_b });
-    await LogsEmail.create({ description: `${subject_b}, ${[payload.order_source_email, payload.client_off_email]}`, edate, etime }, { transaction });
+    await emailService.sendEmail({
+      email_id: [payload.order_source_email, payload.client_off_email],
+      subject: subject_b,
+      html: message_b,
+    });
+    await LogsEmail.create(
+      {
+        description: `${subject_b}, ${[
+          payload.order_source_email,
+          payload.client_off_email,
+        ]}`,
+        edate,
+        etime,
+      },
+      { transaction }
+    );
 
     /** ---------------- Update application report link ---------------- */
     await Application.update(
-      { report_link: prefixService.genVisitLink(`${application.uid}`), report_status: "0", bank_id: payload.client },
+      {
+        report_link: prefixService.genVisitLink(`${application.uid}`),
+        report_status: "0",
+        bank_id: payload.client,
+      },
       { where: { uid: application.uid }, transaction }
     );
 
@@ -282,39 +341,44 @@ await JobManage.update(
 
     /** ---------------- Commit transaction ---------------- */
     await transaction.commit();
-    return res.json({ success: true, message: "Order Created Successfully", jobId: jobs.uid });
+    return res.json({
+      success: true,
+      message: "Order Created Successfully",
+      jobId: jobs.uid,
+    });
   } catch (err) {
     await transaction.rollback();
-    return res.status(500).json({ success: false, message: JSON.stringify(err, Object.getOwnPropertyNames(err)) });
+    return res.status(500).json({
+      success: false,
+      message: JSON.stringify(err, Object.getOwnPropertyNames(err)),
+    });
   }
 };
 
+//-----------------Order Histroy API ---------------
 const orderHistoryList = async (req, res) => {
   try {
     const payload = req.body;
-
-    // Validation (keep rules; aggregate errors properly)
-    const rules = {
+    const validatorRules = {
       AuthenticationToken: "required",
-      searchKey: "required|nullable",
-      fromDate: "required|nullable",
-      toDate: "required|nullable",
-      statusId: "required|nullable|string",
-      techId: "required|nullable|string",
-      client: "required|nullable|string",
+      searchKey: "string",
+      fromDate: "required|string",
+      toDate: "required|string",
+      statusId: "required|string",
+      techId: "required|string",
+      client: "required|string",
       limit: "required|integer|min:0",
       offset: "required|integer|min:0",
     };
-
-    const v = new Validator(payload, rules);
-    if (!(await v.check())) {
-      const message = Object.values(v.errors)
-        .flatMap((arr) => arr)
-        .join(" ");
-      return res.status(200).send({ success: false, message });
+    const v = new Validator(payload, validatorRules);
+    const matched = await v.check();
+    if (!matched) {
+      let results = Object.values(v.errors);
+      let message = results.map((e) => e.message).join(", ");
+      return res.status(200).send({ success: false, message }); // ✅ added return
     }
 
-    // User fetch
+    //USER HIEARARCHY ORDER LIST
     const user = await Usermaster.findOne({
       where: { auth_token: payload.AuthenticationToken },
       attributes: [
@@ -330,222 +394,297 @@ const orderHistoryList = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Authentication token not match" });
+        .json({ success: false, message: "Authentication failed - 1" });
+    }
+    if (user) {
+      const currentDate = new Date();
+      const lastResetDate = new Date(user.getDataValue("last_reset_date"));
+      const currentTimestamp = currentDate.getTime();
+      const lastResetTimestamp = lastResetDate.getTime();
+
+      const daysDifference = Math.ceil(
+        (currentTimestamp - lastResetTimestamp) / (1000 * 60 * 60 * 24)
+      );
+
+      if (daysDifference > 30) {
+        return res.status(200).json({
+          success: true,
+          message: "Reset your password now for enhanced security.",
+        });
+      }
     }
 
-    // Password reset check (keep flow; change to a flag so frontend can decide)
-    const lastResetDate = new Date(user.getDataValue("last_reset_date"));
-    const daysDifference = Math.ceil(
-      (Date.now() - lastResetDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    const needs_password_reset = daysDifference > 30;
+    const selectedBankRaw = user.getDataValue("selected_bank");
+    const selectedDistrictRaw = user.getDataValue("selected_city");
+    const selectedStatesRaw = user.getDataValue("selected_state");
 
-    // Utility: split comma lists
-    const parseList = (raw) =>
-      raw && String(raw).length
-        ? String(raw)
-            .split(",")
-            .map((id) => id.trim())
-            .filter((s) => s !== "")
-            .map((id) => Number(id))
-        : [];
+    const selectedBank = selectedBankRaw
+      ? selectedBankRaw.split(",").map((bankId) => +bankId)
+      : [];
+    const selectedDistrict = selectedDistrictRaw
+      ? selectedDistrictRaw.split(",").map((districtId) => +districtId)
+      : [];
+    const selectedStates = selectedStatesRaw
+      ? selectedStatesRaw.split(",").map((stateId) => +stateId)
+      : [];
 
-    const selectedBank = parseList(user.getDataValue("selected_bank"));
-    const selectedDistrict = parseList(user.getDataValue("selected_city"));
-    const selectedStates = parseList(user.getDataValue("selected_state"));
+    const parseDate = (dateString) => {
+      if (dateString === null) {
+        return null;
+      }
+      const [year, month, day] = dateString.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    };
 
-    // Normalize statusId (string -> number where applicable)
-    const statusIdRaw = payload.statusId;
-    const statusId =
-      statusIdRaw === null || statusIdRaw === "null" || statusIdRaw === ""
-        ? null
-        : Number(statusIdRaw);
+    const whereConditions = [];
 
-    // Parse dates safely (treat as inclusive range with YYYY-MM-DD)
-    const hasDates =
+    // Normalize numeric IDs
+    const techId =
+      payload.techId && payload.techId !== "0" ? +payload.techId : null;
+    const clientId = payload.client ? +payload.client : null;
+    const statusId = payload.statusId ? payload.statusId : null;
+
+    // Condition 1: Search conditions
+    const searchConditions = [];
+    if (payload.searchKey) {
+      searchConditions.push({
+        reg_no: { [Op.like]: `%${payload.searchKey}%` },
+      });
+    }
+    if (statusId && clientId) {
+      searchConditions.push({ report_status: statusId, client: clientId });
+    } else if (statusId && !clientId) {
+      searchConditions.push({ report_status: statusId });
+    } else if (!statusId && clientId) {
+      searchConditions.push({ client: clientId });
+    }
+    if (searchConditions.length > 0) {
+      whereConditions.push({ [Op.or]: searchConditions });
+    }
+
+    // Condition 2: Date range
+    if (
       payload.fromDate &&
       payload.toDate &&
       payload.fromDate !== "null" &&
-      payload.toDate !== "null";
+      payload.toDate !== "null"
+    ) {
+      const fromDate = parseDate(moment(payload.fromDate).format("YYYY-MM-DD"));
+      const toDate = parseDate(moment(payload.toDate).format("YYYY-MM-DD"));
 
-    const parseDate = (dateString) =>
-      dateString ? moment(dateString, "YYYY-MM-DD").toDate() : null;
-
-    const whereAnd = [];
-
-    // Search conditions
-    if (payload.searchKey || payload.statusId || payload.client) {
-      const orSearch = [];
-      if (payload.searchKey) {
-        orSearch.push({ reg_no: { [Op.like]: `%${payload.searchKey}%` } });
-      }
-      if (payload.statusId && payload.client) {
-        orSearch.push({
-          report_status: String(payload.statusId),
-          bank_id: payload.client,
-        });
-      } else if (payload.statusId) {
-        orSearch.push({ report_status: String(payload.statusId) });
-      } else if (payload.client) {
-        orSearch.push({ bank_id: payload.client });
-      }
-      if (orSearch.length) {
-        whereAnd.push({ [Op.or]: orSearch });
+      switch (statusId) {
+        case "6":
+          whereConditions.push({
+            order_completed_date: { [Op.between]: [fromDate, toDate] },
+            report_status: "6",
+          });
+          break;
+        case "7":
+          whereConditions.push({
+            inspection_done_date: { [Op.between]: [fromDate, toDate] },
+            report_status: "7",
+          });
+          break;
+        case "4":
+          whereConditions.push({
+            follow_up_date: { [Op.between]: [fromDate, toDate] },
+            report_status: "4",
+          });
+          break;
+        case "5":
+          whereConditions.push({
+            cancel_date: { [Op.between]: [fromDate, toDate] },
+            report_status: "5",
+          });
+          break;
+        case "8":
+          whereConditions.push({
+            unassign_date: { [Op.between]: [fromDate, toDate] },
+            report_status: "8",
+          });
+          break;
+        case "0":
+          whereConditions.push({
+            edate: { [Op.between]: [fromDate, toDate] },
+            report_status: "0",
+          });
+          break;
+        case "3":
+          if (techId) {
+            whereConditions.push({
+              assigned_tech_date: { [Op.between]: [fromDate, toDate] },
+              report_status: "3",
+              assigned_technician: techId,
+            });
+          } else {
+            whereConditions.push({
+              assigned_tech_date: { [Op.between]: [fromDate, toDate] },
+              report_status: "3",
+            });
+          }
+          break;
+        case "1":
+          whereConditions.push({
+            initiate_date: { [Op.between]: [fromDate, toDate] },
+            report_status: "1",
+          });
+          break;
+        default:
+          whereConditions.push({
+            assigned_tech_date: { [Op.between]: [fromDate, toDate] },
+          });
+          break;
       }
     }
 
-    // Date-field mapping (use numeric key)
-    const statusDateMap = {
-      6: "order_completed_date",
-      7: "inspection_done_date",
-      4: "follow_up_date",
-      5: "cancel_date",
-      8: "unassign_date",
-      0: "edate",
-      3: "assigned_tech_date",
-    };
-
-    if (hasDates) {
-      const fromDate = parseDate(payload.fromDate);
-      const toDate = parseDate(payload.toDate);
-
-      if (statusId !== null && statusDateMap[statusId]) {
-        const dateField = statusDateMap[statusId];
-        const cond = {
-          [dateField]: { [Op.between]: [fromDate, toDate] },
-          report_status: String(statusId),
-        };
-        if (String(statusId) === "3" && payload.techId) {
-          cond.assigned_technician = payload.techId;
-        }
-        whereAnd.push(cond);
-      } else {
-        // fallback to assigned_tech_date when no status filter
-        whereAnd.push({
-          assigned_tech_date: { [Op.between]: [fromDate, toDate] },
-        });
-      }
-    }
-
-    // Role/tech specific filters (preserve flow; make empty arrays safe)
-    if (payload.techId == null) {
-      if (selectedBank.length) {
-        whereAnd.push({ bank_id: { [Op.in]: selectedBank } });
+    // Condition 3: Tech / Bank filter
+    if (!techId) {
+      if (selectedBank.length > 0) {
+        whereConditions.push({ client: { [Op.in]: selectedBank } }); // ✅ client array
       }
     } else {
-      whereAnd.push({ assigned_technician: payload.techId });
+      whereConditions.push({ assigned_technician: techId });
     }
 
-    if (user.getDataValue("role_id") !== 5 && selectedStates.length) {
-      whereAnd.push({ state: { [Op.in]: selectedStates } });
+    // Condition 4: Role-based state filter
+    if (user.getDataValue("role_id") != 5 && selectedStates.length > 0) {
+      whereConditions.push({ state: { [Op.in]: selectedStates } });
     }
 
-    // If user has selected_bank != "0" enforce it
+    // Remove empty objects
+    const filteredConditions = whereConditions.filter(
+      (cond) => Object.keys(cond).length > 0
+    );
+
+    // Final WHERE
+    const finalWhere = { [Op.and]: filteredConditions };
+
+    console.log("Final WHERE:", JSON.stringify(finalWhere, null, 2));
+
+    let statuswhere = {};
+    let counts = 0;
+    if (payload.statusId != null && payload.statusId != undefined) {
+      statuswhere = {
+        [Op.and]: [{ report_status: payload.statusId }],
+      };
+    }
     if (
-      user.getDataValue("selected_bank") &&
-      user.getDataValue("selected_bank") !== "0" &&
-      selectedBank.length
+      payload.statusId != null &&
+      payload.statusId != undefined &&
+      payload.statusId == "3"
     ) {
-      whereAnd.push({ bank_id: { [Op.in]: selectedBank } });
-    }
-
-    // Compose where
-    const where = whereAnd.length ? { [Op.and]: whereAnd } : {};
-
-    // Status-specific counts (preserve special case for statusId === "3")
-    let inspectionCompletedForTech = 0;
-    if (String(payload.statusId) === "3" && payload.techId) {
-      inspectionCompletedForTech = await JobManage.count({
+      counts = await JobManage.count({
         where: {
           report_status: "7",
           assigned_technician: payload.techId,
-          ...(selectedStates.length
-            ? { state: { [Op.in]: selectedStates } }
-            : {}),
+          state: selectedStates,
         },
       });
     }
 
-    // Pagination (add total count)
-    const limit = Number(payload.limit);
-    const page = Number(payload.offset); // original code uses offset * limit
-    const offset = page * limit;
-
-    // Fetch rows
-    const foundData = await JobManage.findAll({
-      where,
-      limit,
-      offset,
+    await JobManage.findAll({
+      where: {
+        [Op.and]: [finalWhere, statuswhere], // ✅ use finalWhere
+      },
+      limit: payload.limit,
+      offset: payload.offset * payload.limit,
       order: [["uid", "DESC"]],
       include: [
-        { model: StateMaster, attributes: ["state_name"], as: "state_master" },
+        {
+          model: StateMaster,
+          attributes: ["state_name"],
+          as: "state_master",
+          required: false, // ✅ safe
+        },
         {
           model: ReportStatus,
           attributes: ["status_name"],
           as: "report_master",
+          required: false,
         },
-        { model: BankMaster, attributes: ["bank_name"], as: "client_master" },
+        {
+          model: BankMaster,
+          attributes: ["bank_name"],
+          as: "client_master",
+          required: false,
+        },
         {
           model: ProcessMaster,
           attributes: ["process_type"],
           as: "process_master",
+          required: false,
         },
       ],
-    });
+    })
+      .then(async (foundData) => {
+        if (foundData) {
+          const groupedData = foundData.reduce((acc, response) => {
+            const statusName = response.report_master
+              ? response.report_master.status_name
+              : null;
 
-    // Total count for same where
-    const totalCount = await JobManage.count({ where });
+            if (statusName) {
+              acc[statusName] = (acc[statusName] || 0) + 1;
+            }
+            return acc;
+          }, {});
 
-    // Group counts by status name (preserve behavior)
-    const groupedData = foundData.reduce((acc, r) => {
-      const s = r.report_master?.status_name;
-      if (s) acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    }, {});
+          var count = Object.keys(groupedData).reduce((result, statusName) => {
+            result[statusName] = groupedData[statusName];
+            return result;
+          }, {});
+          if (
+            payload.statusId != null &&
+            payload.statusId != undefined &&
+            payload.statusId == "3"
+          ) {
+            count["Inspection Completed"] = counts;
+          }
 
-    const count = { ...groupedData };
-    if (String(payload.statusId) === "3") {
-      count["Inspection Completed"] = inspectionCompletedForTech;
-    }
+          const formattedData = foundData.map((response) => ({
+            uid: response.uid,
+            customer_name: response.customer_name,
+            client_type: response.client_master
+              ? response.client_master.bank_name.toUpperCase()
+              : null,
+            reg_no: response.reg_no.toUpperCase(),
+            chassis_no: response.chassis_no,
+            state_name: response.state_master
+              ? response.state_master.state_name
+              : null,
+            status_name: response.report_master
+              ? response.report_master.status_name
+              : null,
+            initiate_date: response.initiate_date,
+            process_type: response.process_master
+              ? response.process_master.process_type.toUpperCase()
+              : null,
+          }));
 
-    const formattedData = foundData.map((r) => ({
-      uid: r.uid,
-      customer_name: r.customer_name,
-      client_type: r.client_master?.bank_name?.toUpperCase() || null,
-      reg_no: r.reg_no?.toUpperCase?.() || r.reg_no,
-      chassis_no: r.chassis_no,
-      state_name: r.state_master?.state_name || null,
-      status_name: r.report_master?.status_name || null,
-      initiate_date: r.initiate_date,
-      process_type: r.process_master?.process_type?.toUpperCase() || null,
-    }));
-
-    return res.status(200).json({
-      success: true,
-      needs_password_reset,
-      data: formattedData,
-      count,
-      pagination: {
-        total: totalCount,
-        limit,
-        page, // zero-based page index as per original offset*limit usage
-        returned: formattedData.length,
-      },
-    });
+          return res
+            .status(200)
+            .json({ success: true, data: formattedData, count });
+        }
+      })
+      .catch((err) => {
+        const errorMessage = err.message || "Internal Server Error";
+        return res.status(500).json({ success: false, message: errorMessage });
+      });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
+// -----------------Order History Details API -----------------
 const orderHistoryDetails = async (req, res) => {
   try {
     const { AuthenticationToken, uid, limit, offset } = req.body;
+    console.log("Incoming payload:", req.body);
 
     // ✅ Input validation
     const v = new Validator(
       { AuthenticationToken, uid, limit, offset },
       {
-        AuthenticationToken: "required",
+        AuthenticationToken: "required|string",
         uid: "required|integer",
         limit: "required|integer|min:0",
         offset: "required|integer|min:0",
@@ -556,7 +695,7 @@ const orderHistoryDetails = async (req, res) => {
       const message = Object.values(v.errors)
         .map((e) => e.message)
         .join(", ");
-      return res.status(200).json({ success: false, message });
+      return res.status(200).json({ success: false, message:message || "Validation Failed" });
     }
 
     // ✅ User authentication
@@ -572,7 +711,8 @@ const orderHistoryDetails = async (req, res) => {
     }
 
     // ✅ Fetch Job Data
-    const where = { uid };
+    const where = {  uid: Number(uid)};
+    console.log("UID after parsing:", uid);
     const [count, foundData] = await Promise.all([
       JobManage.count({ where }),
       JobManage.findOne({
@@ -599,38 +739,20 @@ const orderHistoryDetails = async (req, res) => {
         offset: offset * limit,
         include: [
           { model: BankMaster, attributes: ["bank_name"], as: "client_master" },
-          {
-            model: ProcessMaster,
-            attributes: ["process_type"],
-            as: "process_master",
-          },
+          { model: ProcessMaster, attributes: ["process_type"], as: "process_master" },
           { model: Manufmaster, attributes: ["manuf_name"], as: "make_master" },
-          {
-            model: Modelmaster,
-            attributes: ["model_name"],
-            as: "model_master",
-          },
-          {
-            model: VariantMaster,
-            attributes: ["variant_name"],
-            as: "variant_master",
-          },
-          {
-            model: StateMaster,
-            attributes: ["state_name"],
-            as: "state_master",
-          },
+          { model: Modelmaster, attributes: ["model_name"], as: "model_master" },
+          { model: VariantMaster, attributes: ["variant_name"], as: "variant_master" },
+          { model: StateMaster, attributes: ["state_name"], as: "state_master" },
           { model: CityMaster, attributes: ["city_name"], as: "city_master" },
-          {
-            model: ReportStatus,
-            attributes: ["status_name"],
-            as: "report_master",
-          },
+          { model: ReportStatus, attributes: ["status_name"], as: "report_master" },
         ],
       }),
     ]);
 
-    if (!foundData) {
+    const record = foundData.length > 0 ? foundData[0] : null;
+    
+    if (!record) {
       return res
         .status(200)
         .json({ success: true, message: "Invalid order ID" });
@@ -662,7 +784,7 @@ const orderHistoryDetails = async (req, res) => {
       state_master,
       city_master,
       report_master,
-    } = foundData.dataValues;
+    } = record.dataValues;
 
     const formattedData = {
       uid: orderUid,
@@ -691,9 +813,9 @@ const orderHistoryDetails = async (req, res) => {
     };
 
     // ✅ Fetch Vehicle Info
-    let foundVechData = null;
+    let foundVechData = {};
     if (reg_no) {
-      foundVechData = await VehicleInformation.findOne({
+      const vehicleRecord = await VehicleInformation.findOne({
         where: { registration_number: reg_no },
         attributes: [
           "temp_vahan_search_uid",
@@ -760,60 +882,24 @@ const orderHistoryDetails = async (req, res) => {
           "rc_expiry_date",
         ],
       });
-    }
 
-    // ✅ Vehicle Fallback (if no DB record)
-    if (!foundVechData) {
-      const vehicleDetails = await vahanService.fetchAndUpdateVehicleData(
-        foundData,
-        res
-      );
-      if (vehicleDetails) {
-        return res.status(200).json({
-          success: true,
-          data: { ...formattedData, ...vehicleDetails.dataValues },
-          count,
-        });
+      if (vehicleRecord) {
+        foundVechData = vehicleRecord.dataValues || {};
+      } else {
+        const vehicleDetails = await vahanService.fetchAndUpdateVehicleData(record, res);
+        foundVechData = vehicleDetails?.dataValues || {};
       }
-
-      // Default empty vehicle object
-      foundVechData = {
-        registration_number: reg_no,
-        uid: orderUid,
-        bank_id,
-        initiate_date,
-        assigned_tech_date,
-        customer_name,
-        process_type: formattedData.process_type,
-        client_type: formattedData.client_type,
-        make_name: formattedData.make_name,
-        model_name: formattedData.model_name,
-        variant_name: formattedData.variant_name,
-        state_name: formattedData.state_name,
-        city_name: formattedData.city_name,
-        status_name: formattedData.status_name,
-        contact_no,
-        address,
-        proposal_name,
-        loan_account_no,
-        executive_name,
-        executive_contact,
-        application_id,
-      };
     }
 
-    // ✅ Merge final response
-    const finalData = {
-      ...formattedData,
-      ...(foundVechData?.dataValues || foundVechData),
-    };
+    // ✅ Merge final response safely
+    const finalData = { ...formattedData, ...foundVechData };
 
     return res.status(200).json({ success: true, data: finalData, count });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
+// ------------------------Order-ReInitiated --------------------
 const orderReInitiated = async (req, res) => {
   try {
     const { AuthenticationToken, orderId, re_initiate_remarks } = req.body;
@@ -990,7 +1076,7 @@ const orderReInitiated = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
+// --------------------------Master Order Details List ------------------
 const masterOrderDetailsList = async (req, res) => {
   try {
     const payload = req.body;
@@ -1016,10 +1102,10 @@ const masterOrderDetailsList = async (req, res) => {
       });
       return res.status(200).send({ success: false, message });
     }
-
-    // USER HIERARCHY ORDER LIST
+    //USER HIEARARCHY ORDER LIST
     const user = await Usermaster.findOne({
       where: { auth_token: payload.AuthenticationToken },
+
       attributes: [
         "role_id",
         "selected_bank",
@@ -1033,9 +1119,8 @@ const masterOrderDetailsList = async (req, res) => {
     if (!user) {
       return res
         .status(401)
-        .json({ success: false, message: "Authentication token not match" });
+        .json({ success: false, message: "Authentication failed - 1" });
     }
-
     if (user) {
       // Check if password reset date is older than 30 days
       const currentDate = new Date();
@@ -1046,49 +1131,37 @@ const masterOrderDetailsList = async (req, res) => {
       const daysDifference = Math.ceil(
         (currentTimestamp - lastResetTimestamp) / (1000 * 60 * 60 * 24)
       );
+      // let alert;
       if (daysDifference > 30) {
         return res.status(200).json({
           success: true,
           message: "Reset your password now for enhanced security.",
         });
       }
+      // if (daysDifference > 27 && lastResetDate) {
+      //   alert = 'Your password is set to expire soon.Kindly reset your password.'
+      // }
     }
+    //STATE SPLIT
 
-    // STATE SPLIT
     const selectedBankRaw = user.getDataValue("selected_bank");
     const selectedDistrictRaw = user.getDataValue("selected_city");
     const selectedStatesRaw = user.getDataValue("selected_state");
 
-    // Fix selectedBank, selectedStates, selectedDistrict
     const selectedBank = selectedBankRaw
-      ? selectedBankRaw
-          .split(",")
-          .map((bankId) => Number(bankId))
-          .filter((id) => !isNaN(id))
+      ? selectedBankRaw.split(",").map((bankId) => +bankId)
       : [];
-    console.log("SelectedBank:", selectedBank);
-
     const selectedDistrict = selectedDistrictRaw
-      ? selectedDistrictRaw
-          .split(",")
-          .map((districtId) => Number(districtId))
-          .filter((id) => !isNaN(id))
+      ? selectedDistrictRaw.split(",").map((districtId) => +districtId)
       : [];
-    console.log("selectedDistrict:", selectedDistrict);
-
     const selectedStates = selectedStatesRaw
-      ? selectedStatesRaw
-          .split(",")
-          .map((stateId) => Number(stateId))
-          .filter((id) => !isNaN(id))
+      ? selectedStatesRaw.split(",").map((stateId) => +stateId)
       : [];
-    console.log("SelectedStates:", selectedStates);
 
-    const parseDate = (dateString) => {
+    const parseDateSafe = (dateString) => {
       if (!dateString || dateString === "null") return null;
-      const [year, month, day] = dateString.split("-").map(Number);
-      if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-      return new Date(year, month - 1, day);
+      const m = moment(dateString, "YYYY-MM-DD", true);
+      return m.isValid() ? m.toDate() : null;
     };
 
     const whereConditions = [];
@@ -1121,7 +1194,7 @@ const masterOrderDetailsList = async (req, res) => {
       });
     }
 
-    // Condition 2: Date range conditions
+    // Condition 2: Date range conditions based on statusId
     if (
       payload.statusId !== null &&
       payload.fromDate !== null &&
@@ -1129,15 +1202,17 @@ const masterOrderDetailsList = async (req, res) => {
       payload.fromDate !== "null" &&
       payload.toDate !== "null"
     ) {
-      const fromDate = parseDate(moment(payload.fromDate).format("YYYY-MM-DD"));
-      const toDate = parseDate(moment(payload.toDate).format("YYYY-MM-DD"));
+      const fromDate = parseDateSafe(payload.fromDate);
+      const toDate = parseDateSafe(payload.toDate);
 
       if (payload.statusId === "7") {
+        //Inspection Completed
         whereConditions.push({
           inspection_done_date: { [Op.between]: [fromDate, toDate] },
           report_status: payload.statusId,
         });
       } else if (payload.statusId === "3") {
+        //Technician Assigned
         whereConditions.push({
           assigned_tech_date: { [Op.between]: [fromDate, toDate] },
           report_status: payload.statusId,
@@ -1159,14 +1234,17 @@ const masterOrderDetailsList = async (req, res) => {
     }
 
     if (payload.techId == null) {
+      // ignore for technician login
       whereConditions.push({ bank_id: selectedBank });
     }
 
     if (payload.techId !== null) {
+      // ignore for technician login
       whereConditions.push({ assigned_technician: payload.techId });
     }
-
+    // whereConditions.push({ district: { [Op.in]: selectedDistrict } });
     if (user.getDataValue("role_id") != 5) {
+      //Assign Tech Order List
       whereConditions.push({ state: { [Op.in]: selectedStates } });
     }
 
@@ -1176,9 +1254,9 @@ const masterOrderDetailsList = async (req, res) => {
     };
 
     if (selectedBankRaw && selectedBankRaw !== "0") {
+      // ADMIN BANkID = 0
       where[Op.and].push({ bank_id: { [Op.in]: selectedBank } });
     }
-
     let statuswhere = {};
     let counts = 0;
     if (payload.statusId != null && payload.statusId != undefined) {
@@ -1186,20 +1264,22 @@ const masterOrderDetailsList = async (req, res) => {
         [Op.and]: [{ report_status: payload.statusId }],
       };
     }
-
     if (
       payload.statusId != null &&
       payload.statusId != undefined &&
       payload.statusId == "3"
     ) {
+      // let statuswhere1 = {
+      //   [Op.and]: [{ report_status: '7' }],
+      // };
       counts = await JobManage.count({
         where: {
           report_status: "7",
           assigned_technician: payload.techId,
+          //  state: selectedStates
         },
       });
     }
-
     await JobManage.findAll({
       where: {
         [Op.and]: [where, statuswhere],
@@ -1209,21 +1289,41 @@ const masterOrderDetailsList = async (req, res) => {
       offset: payload.offset * payload.limit,
       order: [["uid", "DESC"]],
       include: [
-        { model: StateMaster, attributes: ["state_name"], as: "state_master" },
-        { model: CityMaster, attributes: ["city_name"], as: "city_master" },
+        {
+          model: StateMaster,
+          attributes: ["state_name"],
+          as: "state_master",
+        },
+        {
+          model: CityMaster,
+          attributes: ["city_name"],
+          as: "city_master",
+        },
         {
           model: ReportStatus,
           attributes: ["status_name"],
           as: "report_master",
         },
-        { model: BankMaster, attributes: ["bank_name"], as: "client_master" },
+        {
+          model: BankMaster,
+          attributes: ["bank_name"],
+          as: "client_master",
+        },
         {
           model: ProcessMaster,
           attributes: ["process_type"],
           as: "process_master",
         },
-        { model: Manufmaster, attributes: ["manuf_name"], as: "make_master" },
-        { model: Modelmaster, attributes: ["model_name"], as: "model_master" },
+        {
+          model: Manufmaster,
+          attributes: ["manuf_name"],
+          as: "make_master",
+        },
+        {
+          model: Modelmaster,
+          attributes: ["model_name"],
+          as: "model_master",
+        },
         {
           model: VariantMaster,
           attributes: ["variant_name"],
@@ -1237,6 +1337,7 @@ const masterOrderDetailsList = async (req, res) => {
             const statusName = response.report_master
               ? response.report_master.status_name
               : null;
+
             if (statusName) {
               acc[statusName] = (acc[statusName] || 0) + 1;
             }
@@ -1248,17 +1349,19 @@ const masterOrderDetailsList = async (req, res) => {
             return result;
           }, {});
 
+          // Check if 'Inspection Completed' is not present in the result and add it with a value of 0
           if (!count.hasOwnProperty("Inspection Completed")) {
             count["Inspection Completed"] = 0;
           }
+
+          // Check if 'Technician Assigned' is not present in the result and add it with a value of 0
           if (!count.hasOwnProperty("Technician Assigned")) {
             count["Technician Assigned"] = 0;
           }
-
           const formattedData = [];
           for (const foundDataItem of foundData) {
             try {
-              // Vehicle information
+              // Fetch VehicleInformation
               let foundVechData = await VehicleInformation.findOne({
                 where: { registration_number: foundDataItem.reg_no },
                 attributes: [
@@ -1326,62 +1429,119 @@ const masterOrderDetailsList = async (req, res) => {
                   "rc_expiry_date",
                 ],
               });
-
+              // Old Order Vehicle Information Fetch From Vahan API if not found in the database
               if (!foundVechData) {
-                const foundDataLocal = foundDataItem;
+                const foundData = foundDataItem;
                 const vehicleNumber = foundDataItem.reg_no;
                 const vehicleDetails =
-                  await vahanService.fetchAndUpdateVehicleData(
-                    foundDataLocal,
-                    res
-                  );
+                  await vahanService.fetchAndUpdateVehicleData(foundData, res);
                 if (vehicleDetails == null) {
                   foundVechData = {
+                    temp_vahan_search_uid: "",
+                    owner_name: "",
+                    registered_place: "",
+                    owner_mobile_no: "",
+                    manufacturer: "",
+                    manufacturer_model: "",
+                    engine_number: "",
+                    chassis_number: "",
                     registration_number: vehicleNumber,
-                    uid: foundDataLocal.dataValues.uid,
-                    bank_id: foundDataLocal.dataValues.bank_id,
-                    initiate_date: foundDataLocal.dataValues.initiate_date,
-                    assigned_tech_date:
-                      foundDataLocal.dataValues.assigned_tech_date,
-                    customer_name: foundDataLocal.dataValues.customer_name,
-                    process_type: foundDataLocal.dataValues.process_master
-                      ? foundDataLocal.dataValues.process_master.process_type
+                    registration_date: "",
+                    m_registration: "",
+                    m_registration_name: "",
+                    y_registration: "",
+                    body_type: "",
+                    m_y_manufacturing: "",
+                    m_manufacturing: "",
+                    m_manufacturing_name: "",
+                    y_manufacturing: "",
+                    seating_capacity: "",
+                    fuel_type: "",
+                    insurance_name: "",
+                    insurance_validity: "",
+                    vehicle_class: "",
+                    colour: "",
+                    owner_serial_number: "",
+                    number_of_cylinder: "",
+                    permit_no: "",
+                    fitness_upto: "",
+                    insurance_policy_no: "",
+                    permanent_address: "",
+                    permit_validity_from: "",
+                    permit_validity_upto: "",
+                    permit_type: "",
+                    financer: "",
+                    noc_details: "",
+                    norms_type: "",
+                    blacklist_status: "",
+                    puc_number: "",
+                    current_address: "",
+                    permit_issue_date: "",
+                    npermit_upto: "",
+                    father_name: "",
+                    gross_vehicle_weight: "",
+                    cubic_capacity: "",
+                    status_message: "",
+                    wheelbase: "",
+                    status: "",
+                    npermit_issued_by: "",
+                    noc_status: "",
+                    mv_tax_upto: "",
+                    state: "",
+                    npermit_no: "",
+                    noc_valid_upto: "",
+                    noc_issue_date: "",
+                    status_verification: "",
+                    puc_valid_upto: "",
+                    unladden_weight: "",
+                    standing_capacity: "",
+                    status_verfy_date: "",
+                    vehicle_category: "",
+                    sleeper_capacity: "",
+                    rc_expiry_date: "",
+
+                    uid: foundData.dataValues.uid,
+                    bank_id: foundData.dataValues.bank_id,
+                    initiate_date: foundData.dataValues.initiate_date,
+                    assigned_tech_date: foundData.dataValues.assigned_tech_date,
+                    customer_name: foundData.dataValues.customer_name,
+                    process_type: foundData.dataValues.process_master
+                      ? foundData.dataValues.process_master.process_type
                       : null,
-                    client_type: foundDataLocal.dataValues.client_master
-                      ? foundDataLocal.dataValues.client_master.bank_name
+                    client_type: foundData.dataValues.client_master
+                      ? foundData.dataValues.client_master.bank_name
                       : null,
-                    make_name: foundDataLocal.dataValues.make_master
-                      ? foundDataLocal.dataValues.make_master.manuf_name
+                    make_name: foundData.dataValues.make_master
+                      ? foundData.dataValues.make_master.manuf_name
                       : null,
-                    model_name: foundDataLocal.dataValues.model_master
-                      ? foundDataLocal.dataValues.model_master.model_name
+                    model_name: foundData.dataValues.model_master
+                      ? foundData.dataValues.model_master.model_name
                       : null,
-                    variant_name: foundDataLocal.dataValues.variant_master
-                      ? foundDataLocal.dataValues.variant_master.variant_name
+                    variant_name: foundData.dataValues.variant_master
+                      ? foundData.dataValues.variant_master.variant_name
                       : null,
-                    state_name: foundDataLocal.dataValues.state_master
-                      ? foundDataLocal.dataValues.state_master.state_name
+                    state_name: foundData.dataValues.state_master
+                      ? foundData.dataValues.state_master.state_name
                       : null,
-                    city_name: foundDataLocal.dataValues.city_master
-                      ? foundDataLocal.dataValues.city_master.city_name
+                    city_name: foundData.dataValues.city_master
+                      ? foundData.dataValues.city_master.city_name
                       : null,
-                    status_name: foundDataLocal.dataValues.report_master
-                      ? foundDataLocal.dataValues.report_master.status_name
+                    status_name: foundData.dataValues.report_master
+                      ? foundData.dataValues.report_master.status_name
                       : null,
-                    contact_no: foundDataLocal.dataValues.contact_no,
-                    address: foundDataLocal.dataValues.address,
-                    proposal_name: foundDataLocal.dataValues.proposal_name,
-                    loan_account_no: foundDataLocal.dataValues.loan_account_no,
-                    executive_name: foundDataLocal.dataValues.executive_name,
-                    executive_contact:
-                      foundDataLocal.dataValues.executive_contact,
-                    application_id: foundDataLocal.dataValues.application_id,
+                    contact_no: foundData.dataValues.contact_no,
+                    address: foundData.dataValues.address,
+                    proposal_name: foundData.dataValues.proposal_name,
+                    loan_account_no: foundData.dataValues.loan_account_no,
+                    executive_name: foundData.dataValues.executive_name,
+                    executive_contact: foundData.dataValues.executive_contact,
+                    application_id: foundData.dataValues.application_id,
                   };
                 } else {
                   foundVechData = vehicleDetails;
                 }
               }
-
+              // Construct the data object including JobNotes
               const orderListDetails = {
                 uid: foundDataItem.uid,
                 customer_name: foundDataItem.customer_name,
@@ -1400,10 +1560,9 @@ const masterOrderDetailsList = async (req, res) => {
                 initiate_date: foundDataItem.initiate_date,
                 process_type:
                   foundDataItem.process_master?.dataValues?.process_type ||
-                  null,
+                  "null".toUpperCase(),
                 assigned_tech_date: foundDataItem.assigned_tech_date,
               };
-
               let mergeData = {
                 bank_id: foundDataItem.dataValues.bank_id,
                 initiate_date: foundDataItem.initiate_date,
@@ -1448,13 +1607,12 @@ const masterOrderDetailsList = async (req, res) => {
                   mergeData
                 );
               }
-
               const masterOrderDetails = {
                 order_list: orderListDetails,
                 order_details: foundVechData || null,
               };
 
-              formattedData.push(masterOrderDetails);
+              formattedData.push(masterOrderDetails); // Add valid data to the result array
             } catch (error) {
               console.error(
                 `Error fetching data for registration number ${foundDataItem.reg_no}:`,
@@ -1462,7 +1620,6 @@ const masterOrderDetailsList = async (req, res) => {
               );
             }
           }
-
           return res
             .status(200)
             .json({ success: true, data: formattedData, count });
@@ -1476,14 +1633,14 @@ const masterOrderDetailsList = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
+// ------------------------- Get Activity ------------------------------
 const getActivity = async (req, res) => {
   try {
     const payload = req.body;
     const validatorRules = {
       AuthenticationToken: "required",
-      statusId: "required|nullable|string",
-      techId: "required|nullable|string",
+      statusId: "string",
+      techId: "string",
       limit: "required|integer|min:0",
       job_id: "required|integer|min:0",
       offset: "required|integer|min:0",
